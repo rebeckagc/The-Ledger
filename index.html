@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Ledger</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="theme-color" content="#1c2b3a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Lora:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper: #eaf1e4; --paper-line: #b9cdae; --paper-line-strong: #8fa885;
+    --ink: #1c2b3a; --ink-soft: #4a5a68; --red: #a23b2e; --green: #2f6b4a;
+    --brass: #a67c2e; --brass-soft: #e8dcb8; --card: #f4f8ef; --shadow: rgba(28,43,58,0.12);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; }
+  body{
+    font-family: 'Lora', Georgia, serif;
+    background: repeating-linear-gradient(to bottom, var(--paper) 0px, var(--paper) 27px, var(--paper-line) 28px);
+    color: var(--ink); min-height: 100vh; padding-bottom: env(safe-area-inset-bottom);
+  }
+  #ledger-root{ position:relative; min-height:100vh; }
+  #ledger-root::before{ content:""; position:absolute; top:0; bottom:0; left:64px; width:2px; background: var(--red); opacity:0.35; pointer-events:none; }
+  .lg-wrap{ max-width: 760px; margin: 0 auto; padding: max(28px, env(safe-area-inset-top)) 24px 60px 84px; }
+  .lg-header{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 3px double var(--ink); padding-bottom: 10px; margin-bottom: 12px; }
+  .lg-title{ font-family: 'Special Elite', 'Courier New', monospace; font-size: 26px; letter-spacing: 1px; margin:0; }
+  .lg-title span{ color: var(--brass); }
+  .lg-date{ font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-soft); text-align:right; }
+  .lg-sync-bar{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom: 16px; flex-wrap:wrap; }
+  .lg-sync-status{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--ink-soft); }
+  .lg-google-btn{ font-family:'IBM Plex Mono', monospace; font-size: 11px; text-transform:uppercase; letter-spacing:0.4px; padding:7px 12px; border-radius:3px; border:1px solid var(--paper-line-strong); background:#fff; cursor:pointer; color:var(--ink); }
+  .lg-google-btn:hover{ border-color: var(--brass); }
+  .lg-balance-stamp{ display:inline-block; border: 3px solid; border-radius: 6px; padding: 10px 18px; font-family: 'Special Elite', 'Courier New', monospace; font-size: 18px; transform: rotate(-2deg); margin: 10px 0 22px 0; letter-spacing: 1px; }
+  .lg-balance-stamp.pos{ color: var(--green); border-color: var(--green); }
+  .lg-balance-stamp.neg{ color: var(--red); border-color: var(--red); }
+  .lg-tabs{ display:flex; gap: 2px; margin-bottom: 20px; border-bottom: 1px solid var(--paper-line-strong); overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .lg-tab{ font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; background: none; border: none; padding: 8px 10px; cursor: pointer; color: var(--ink-soft); border-bottom: 3px solid transparent; white-space:nowrap; flex-shrink:0; }
+  .lg-tab.active{ color: var(--ink); border-color: var(--brass); font-weight: 600; }
+  .lg-panel{ display:none; } .lg-panel.active{ display:block; animation: fade .2s ease; }
+  @keyframes fade{ from{opacity:0} to{opacity:1} }
+  .lg-card{ background: var(--card); border: 1px solid var(--paper-line-strong); border-radius: 4px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 3px var(--shadow); }
+  .lg-card h2{ font-family: 'Special Elite', 'Courier New', monospace; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.8px; margin: 0 0 12px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  .lg-summary-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .lg-summary-item{ text-align:center; }
+  .lg-summary-item .label{ font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); text-transform: uppercase; }
+  .lg-summary-item .value{ font-family: 'IBM Plex Mono', monospace; font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .lg-summary-item .value.income{ color: var(--green); } .lg-summary-item .value.expense{ color: var(--red); }
+  .lg-row{ display:flex; justify-content:space-between; align-items:center; padding: 8px 0; border-bottom: 1px solid var(--paper-line); font-size: 13.5px; gap:6px; }
+  .lg-row:last-child{ border-bottom:none; }
+  .lg-row .desc{ flex:1; min-width:0; }
+  .lg-row .cat{ font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); background: var(--brass-soft); padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+  .lg-row .amt{ font-family: 'IBM Plex Mono', monospace; font-weight: 600; min-width: 78px; text-align:right; }
+  .lg-row .amt.income{ color: var(--green); } .lg-row .amt.expense{ color: var(--red); }
+  .lg-row .del{ background:none; border:none; cursor:pointer; color: var(--ink-soft); font-size: 16px; opacity: 0.5; padding:0 4px; }
+  .lg-row .del:hover{ opacity: 1; color: var(--red); }
+  .lg-empty{ color: var(--ink-soft); font-style: italic; font-size: 13px; padding: 6px 0; }
+  .lg-form{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+  .lg-form label{ display:block; font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 3px; }
+  .lg-form input, .lg-form select{ width:100%; font-family: 'Lora', Georgia, serif; font-size: 16px; padding: 8px; border: 1px solid var(--paper-line-strong); border-radius: 3px; background: #fff; color: var(--ink); }
+  .lg-form input:focus, .lg-form select:focus{ outline: 2px solid var(--brass); outline-offset: 1px; }
+  .lg-form-full{ grid-column: 1 / -1; }
+  .lg-btn{ font-family: 'IBM Plex Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; background: var(--ink); color: var(--paper); border: none; padding: 10px 16px; border-radius: 3px; cursor: pointer; margin-top: 6px; width:100%; }
+  .lg-btn:focus-visible{ outline: 2px solid var(--brass); outline-offset: 2px; }
+  .lg-btn.secondary{ background: transparent; color: var(--ink); border: 1px solid var(--ink-soft); }
+  .lg-type-toggle{ display:flex; gap:6px; }
+  .lg-type-toggle button{ flex:1; padding: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; border: 1px solid var(--paper-line-strong); background: #fff; cursor: pointer; border-radius: 3px; color: var(--ink-soft); }
+  .lg-type-toggle button.sel-income.active{ background: var(--green); color:#fff; border-color: var(--green); }
+  .lg-type-toggle button.sel-expense.active{ background: var(--red); color:#fff; border-color: var(--red); }
+  .lg-budget-item{ margin-bottom: 14px; }
+  .lg-budget-top{ display:flex; justify-content:space-between; align-items:baseline; font-size: 13px; margin-bottom: 4px; gap:8px; }
+  .lg-budget-top .name{ font-weight: 600; }
+  .lg-budget-top .nums{ font-family:'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ink-soft); white-space:nowrap; }
+  .lg-bar-track{ height: 10px; background: var(--paper); border: 1px solid var(--paper-line-strong); border-radius: 6px; overflow: hidden; }
+  .lg-bar-fill{ height: 100%; background: var(--green); transition: width .3s ease; }
+  .lg-bar-fill.over{ background: var(--red); } .lg-bar-fill.warn{ background: var(--brass); }
+  .lg-bill-row{ display:flex; align-items:center; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--paper-line); font-size: 13.5px; gap:8px; }
+  .lg-bill-row:last-child{ border-bottom: none; }
+  .lg-bill-left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .lg-bill-left .name{ font-weight:600; }
+  .lg-bill-left .meta{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--ink-soft); }
+  .lg-bill-right{ display:flex; align-items:center; gap: 8px; flex-shrink:0; }
+  .lg-bill-amt{ font-family:'IBM Plex Mono', monospace; font-weight:600; min-width: 70px; text-align:right; }
+  .lg-paid-check{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; padding: 6px 9px; border-radius: 3px; cursor: pointer; border: 1px solid var(--paper-line-strong); background:#fff; color: var(--ink-soft); }
+  .lg-paid-check.paid{ background: var(--green); color:#fff; border-color: var(--green); }
+  .lg-remove-cat{ background:none; border:none; cursor:pointer; color: var(--ink-soft); opacity:0.5; font-size:14px; }
+  .lg-remove-cat:hover{ opacity:1; color: var(--red); }
+  .lg-sink-item{ margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--paper-line); }
+  .lg-sink-item:last-child{ border-bottom:none; }
+  .lg-sink-top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; gap:8px; }
+  .lg-sink-top .name{ font-weight:600; font-size:13.5px; }
+  .lg-sink-top .nums{ font-family:'IBM Plex Mono', monospace; font-size: 11.5px; color: var(--ink-soft); white-space:nowrap; }
+  .lg-sink-actions{ display:flex; gap:6px; margin-top:8px; align-items:center; }
+  .lg-sink-actions input{ width:90px; font-family:'IBM Plex Mono',monospace; font-size:13px; padding:6px; border:1px solid var(--paper-line-strong); border-radius:3px; }
+  .lg-mini-btn{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; text-transform:uppercase; padding:6px 10px; border-radius:3px; border:1px solid var(--paper-line-strong); background:#fff; cursor:pointer; color:var(--ink-soft); }
+  .lg-mini-btn:hover{ color:var(--ink); border-color:var(--ink-soft); }
+  @media (max-width: 520px){
+    .lg-wrap{ padding: 20px 12px 50px 42px; }
+    #ledger-root::before{ left: 26px; }
+    .lg-form{ grid-template-columns: 1fr; }
+    .lg-summary-grid{ grid-template-columns: 1fr; gap: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce){ .lg-panel.active{ animation: none; } .lg-bar-fill{ transition: none; } }
+</style>
+</head>
+<body>
+<div id="ledger-root">
+  <div class="lg-wrap">
+    <div class="lg-header">
+      <h1 class="lg-title">The <span>Ledger</span></h1>
+      <div class="lg-date" id="lg-today"></div>
+    </div>
+
+    <div class="lg-sync-bar">
+      <button class="lg-google-btn" id="lg-google-signin">Sign in with Google</button>
+      <span class="lg-sync-status" id="lg-sync-status">Not signed in &middot; saving on this device only</span>
+    </div>
+
+    <div id="lg-stamp-wrap"></div>
+
+    <div class="lg-tabs" role="tablist">
+      <button class="lg-tab active" data-tab="overview">Overview</button>
+      <button class="lg-tab" data-tab="transactions">Transactions</button>
+      <button class="lg-tab" data-tab="budgets">Budgets</button>
+      <button class="lg-tab" data-tab="sinking">Sinking Funds</button>
+      <button class="lg-tab" data-tab="bills">Bills</button>
+    </div>
+
+    <div class="lg-panel active" id="panel-overview">
+      <div class="lg-card">
+        <h2>This Month <button class="lg-mini-btn" id="lg-export-btn">Export month to Excel</button></h2>
+        <div class="lg-summary-grid" id="lg-summary"></div>
+      </div>
+      <div class="lg-card"><h2>By Category</h2><div id="lg-cat-breakdown"></div></div>
+      <div class="lg-card"><h2>Recent Entries</h2><div id="lg-recent"></div></div>
+    </div>
+
+    <div class="lg-panel" id="panel-transactions">
+      <div class="lg-card">
+        <h2>Add Entry</h2>
+        <div class="lg-type-toggle" id="lg-type-toggle">
+          <button class="sel-expense active" data-type="expense">Expense</button>
+          <button class="sel-income" data-type="income">Income</button>
+        </div>
+        <div class="lg-form" style="margin-top:10px;">
+          <div><label>Description</label><input type="text" id="lg-tx-desc" placeholder="e.g. Groceries"></div>
+          <div><label>Amount</label><input type="number" id="lg-tx-amount" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Category</label><select id="lg-tx-category"></select></div>
+          <div><label>Date</label><input type="date" id="lg-tx-date"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-tx">Add entry</button>
+      </div>
+      <div class="lg-card"><h2>All Entries</h2><div id="lg-tx-list"></div></div>
+    </div>
+
+    <div class="lg-panel" id="panel-budgets">
+      <div class="lg-card">
+        <h2>Set a Monthly Budget</h2>
+        <div class="lg-form">
+          <div><label>Category</label><select id="lg-budget-cat"></select></div>
+          <div><label>Monthly limit</label><input type="number" id="lg-budget-amount" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-budget">Save budget</button>
+      </div>
+      <div class="lg-card"><h2>Progress This Month</h2><div id="lg-budget-list"></div></div>
+      <div class="lg-card">
+        <h2>Categories</h2>
+        <div id="lg-cat-manage"></div>
+        <div class="lg-form" style="margin-top:10px;"><div class="lg-form-full"><label>New category name</label><input type="text" id="lg-new-cat" placeholder="e.g. Subscriptions"></div></div>
+        <button class="lg-btn secondary" id="lg-add-cat">Add category</button>
+      </div>
+    </div>
+
+    <div class="lg-panel" id="panel-sinking">
+      <div class="lg-card">
+        <h2>Add a Sinking Fund</h2>
+        <p style="font-size:12.5px; color:var(--ink-soft); margin-top:-6px;">Money you're setting aside toward a goal &mdash; an emergency fund, a savings target, a specific pot.</p>
+        <div class="lg-form">
+          <div><label>Name</label><input type="text" id="lg-sf-name" placeholder="e.g. Emergency Fund"></div>
+          <div><label>Target amount</label><input type="number" id="lg-sf-target" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Already saved</label><input type="number" id="lg-sf-saved" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-sf">Add sinking fund</button>
+      </div>
+      <div class="lg-card"><h2>Sinking Funds</h2><div id="lg-sf-list"></div></div>
+
+      <div class="lg-card">
+        <h2>Add a Non-Recurrent Expense</h2>
+        <p style="font-size:12.5px; color:var(--ink-soft); margin-top:-6px;">One-off or irregular costs &mdash; insurance renewals, repairs, a big exam fee.</p>
+        <div class="lg-form">
+          <div><label>Name</label><input type="text" id="lg-oo-name" placeholder="e.g. Vehicle Insurance"></div>
+          <div><label>Budgeted amount</label><input type="number" id="lg-oo-budget" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Spent so far</label><input type="number" id="lg-oo-spent" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-oo">Add expense</button>
+      </div>
+      <div class="lg-card"><h2>Non-Recurrent Expenses</h2><div id="lg-oo-list"></div></div>
+    </div>
+
+    <div class="lg-panel" id="panel-bills">
+      <div class="lg-card">
+        <h2>Add Recurring Bill</h2>
+        <div class="lg-form">
+          <div><label>Name</label><input type="text" id="lg-bill-name" placeholder="e.g. Rent"></div>
+          <div><label>Amount</label><input type="number" id="lg-bill-amount" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Due day of month</label><input type="number" id="lg-bill-day" placeholder="1-31" min="1" max="31"></div>
+          <div><label>Frequency</label><select id="lg-bill-freq"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="yearly">Yearly</option></select></div>
+        </div>
+        <button class="lg-btn" id="lg-add-bill">Add bill</button>
+      </div>
+      <div class="lg-card"><h2>Upcoming &amp; Recurring</h2><div id="lg-bill-list"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---- Fill in your own values here ----
+  const CLIENT_ID = '1090005722467-1637lpril2kim2qkslm75rfgu4ph1osv.apps.googleusercontent.com';
+  const SPREADSHEET_ID = '1DK_UeDxronYKYFiTEByACeVSMjcRWb3HTSBDKDE1icE';
+  const SHEET_TAB_NAME = 'LedgerData';
+  // ----------------------------------------
+
+  const STORAGE_KEY = 'ledgerAppData';
+  const DEFAULT_CATEGORIES = ['Rent','Groceries','Electricity','Gym','Gas','Dogs','Phone and Internet','Loan Installment','Vehicle Mortgage','Credit Cards','Supplements','Grooming','Medication','Food','Massages','Subscriptions','Misc','Income'];
+
+  const DEFAULT_BUDGETS = {
+    'Rent': 8800, 'Groceries': 5500, 'Electricity': 600, 'Gym': 350, 'Gas': 1800,
+    'Dogs': 1200, 'Phone and Internet': 920, 'Loan Installment': 1850, 'Vehicle Mortgage': 2202,
+    'Credit Cards': 1381, 'Supplements': 600, 'Grooming': 1200, 'Medication': 2050,
+    'Food': 1500, 'Massages': 1000, 'Subscriptions': 478.32
+  };
+  const DEFAULT_SINKING_FUNDS = [
+    { id: 'sf1', name: 'Emergency Fund', target: 5000, saved: 1000 },
+    { id: 'sf2', name: 'Savings USD', target: 755, saved: 755 },
+    { id: 'sf3', name: 'Savings TTD', target: 1130, saved: 1000 }
+  ];
+  const DEFAULT_ONE_OFFS = [
+    { id: 'oo1', name: 'Vehicle Insurance - Kia', budget: 4700, spent: 4697.82 },
+    { id: 'oo2', name: 'MRCPsych', budget: 5126.61, spent: 0 },
+    { id: 'oo3', name: 'Tyres - Kia', budget: 2600, spent: 1800 },
+    { id: 'oo4', name: 'A/C - Corolla', budget: 300, spent: 0 }
+  ];
+
+  let state = { transactions: [], budgets: {}, bills: [], categories: [], sinkingFunds: [], oneOffs: [], updatedAt: 0 };
+  let currentTxType = 'expense';
+  let accessToken = null;
+  let tokenClient = null;
+  let pushTimer = null;
+
+  function fmt(n){ const sign = n < 0 ? '-' : ''; return sign + '$' + Math.abs(n).toFixed(2); }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function monthKey(dateStr){ return dateStr.slice(0,7); }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+  function setSyncStatus(msg){ document.getElementById('lg-sync-status').textContent = msg; }
+
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){ state = Object.assign(state, JSON.parse(raw)); }
+      else seedDefaults();
+      if(!state.categories || !state.categories.length) state.categories = DEFAULT_CATEGORIES.slice();
+    }catch(e){ seedDefaults(); }
+  }
+
+  function seedDefaults(){
+    state.categories = DEFAULT_CATEGORIES.slice();
+    state.budgets = Object.assign({}, DEFAULT_BUDGETS);
+    state.sinkingFunds = DEFAULT_SINKING_FUNDS.map(f => Object.assign({}, f));
+    state.oneOffs = DEFAULT_ONE_OFFS.map(o => Object.assign({}, o));
+  }
+
+  function save(){
+    state.updatedAt = Date.now();
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.error(e); }
+    if(accessToken){
+      setSyncStatus('Syncing…');
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(pushToSheet, 800);
+    }
+  }
+
+  // ---------- Google Sign-In + Sheets Sync ----------
+
+  function initGoogle(){
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
+      callback: async (resp) => {
+        if(resp && resp.access_token){
+          accessToken = resp.access_token;
+          document.getElementById('lg-google-signin').textContent = 'Signed in';
+          setSyncStatus('Signed in — syncing…');
+          await syncFromSheet();
+          renderAll();
+        }
+      }
+    });
+    document.getElementById('lg-google-signin').disabled = false;
+  }
+
+  function waitForGoogle(){
+    if(window.google && google.accounts && google.accounts.oauth2){ initGoogle(); }
+    else setTimeout(waitForGoogle, 200);
+  }
+
+  async function sheetsFetch(path, options){
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}${path}`, Object.assign({
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+    }, options));
+    if(!res.ok){ throw new Error('Sheets API error: ' + res.status); }
+    return res.json();
+  }
+
+  async function ensureSheetTabExists(){
+    const meta = await sheetsFetch('');
+    const exists = meta.sheets.some(s => s.properties.title === SHEET_TAB_NAME);
+    if(!exists){
+      await sheetsFetch(':batchUpdate', {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: SHEET_TAB_NAME } } }] })
+      });
+    }
+  }
+
+  async function syncFromSheet(){
+    try{
+      await ensureSheetTabExists();
+      const data = await sheetsFetch(`/values/${encodeURIComponent(SHEET_TAB_NAME + '!A1')}`);
+      const cell = data.values && data.values[0] && data.values[0][0];
+      if(cell){
+        const remote = JSON.parse(cell);
+        if(!state.updatedAt || (remote.updatedAt && remote.updatedAt > state.updatedAt)){
+          state = Object.assign(state, remote);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } else if(state.updatedAt > (remote.updatedAt||0)){
+          await pushToSheet();
+        }
+        setSyncStatus('Synced just now');
+      } else {
+        await pushToSheet();
+      }
+    }catch(e){
+      console.error(e);
+      setSyncStatus('Sync failed — check console');
+    }
+  }
+
+  async function pushToSheet(){
+    if(!accessToken) return;
+    try{
+      await ensureSheetTabExists();
+      await sheetsFetch(`/values/${encodeURIComponent(SHEET_TAB_NAME + '!A1')}?valueInputOption=RAW`, {
+        method: 'PUT',
+        body: JSON.stringify({ values: [[JSON.stringify(state)]] })
+      });
+      setSyncStatus('Synced just now');
+    }catch(e){
+      console.error(e);
+      setSyncStatus('Sync failed — will retry on next change');
+    }
+  }
+
+  // ---------- Excel export ----------
+
+  function exportMonthToExcel(){
+    const mKey = new Date().toISOString().slice(0,7);
+    const monthTx = state.transactions.filter(t => monthKey(t.date) === mKey);
+
+    const txRows = [['Date','Description','Category','Type','Amount']]
+      .concat(monthTx.map(t => [t.date, t.description, t.category, t.type, t.amount]));
+
+    const spentByCat = {};
+    monthTx.filter(t=>t.type==='expense').forEach(t=>{ spentByCat[t.category] = (spentByCat[t.category]||0) + t.amount; });
+    const budgetRows = [['Category','Budget','Spent']]
+      .concat(Object.entries(state.budgets).map(([cat,limit]) => [cat, limit, spentByCat[cat]||0]));
+
+    const sinkRows = [['Sinking Fund','Target','Saved']]
+      .concat(state.sinkingFunds.map(f => [f.name, f.target, f.saved]));
+
+    const oneOffRows = [['Non-Recurrent Expense','Budget','Spent']]
+      .concat(state.oneOffs.map(o => [o.name, o.budget, o.spent]));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txRows), 'Transactions');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(budgetRows), 'Budgets');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sinkRows), 'Sinking Funds');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(oneOffRows), 'Non-Recurrent');
+    XLSX.writeFile(wb, `Ledger-${mKey}.xlsx`);
+  }
+
+  // ---------- Rendering ----------
+
+  function populateCategorySelects(){
+    [document.getElementById('lg-tx-category'), document.getElementById('lg-budget-cat')].forEach(sel => {
+      const prevVal = sel.value;
+      sel.innerHTML = '';
+      state.categories.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat; opt.textContent = cat;
+        sel.appendChild(opt);
+      });
+      if(state.categories.includes(prevVal)) sel.value = prevVal;
+    });
+  }
+
+  function renderStamp(){
+    const wrap = document.getElementById('lg-stamp-wrap');
+    const mKey = new Date().toISOString().slice(0,7);
+    let income = 0, expense = 0;
+    state.transactions.forEach(t => { if(monthKey(t.date) === mKey){ if(t.type === 'income') income += t.amount; else expense += t.amount; } });
+    const balance = income - expense;
+    const cls = balance >= 0 ? 'pos' : 'neg';
+    const label = balance >= 0 ? 'IN THE BLACK' : 'IN THE RED';
+    wrap.innerHTML = `<div class="lg-balance-stamp ${cls}">${label} &middot; ${fmt(balance)}</div>`;
+  }
+
+  function renderOverview(){
+    const mKey = new Date().toISOString().slice(0,7);
+    const monthTx = state.transactions.filter(t => monthKey(t.date) === mKey);
+    const income = monthTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const expense = monthTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    document.getElementById('lg-summary').innerHTML = `
+      <div class="lg-summary-item"><div class="label">Income</div><div class="value income">${fmt(income)}</div></div>
+      <div class="lg-summary-item"><div class="label">Expenses</div><div class="value expense">${fmt(expense)}</div></div>
+      <div class="lg-summary-item"><div class="label">Balance</div><div class="value">${fmt(income-expense)}</div></div>
+    `;
+    const byCat = {};
+    monthTx.filter(t=>t.type==='expense').forEach(t=>{ byCat[t.category] = (byCat[t.category]||0) + t.amount; });
+    const catEntries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+    document.getElementById('lg-cat-breakdown').innerHTML = catEntries.length
+      ? catEntries.map(([cat,amt]) => `<div class="lg-row"><span class="desc">${escapeHtml(cat)}</span><span class="amt expense">${fmt(amt)}</span></div>`).join('')
+      : '<div class="lg-empty">No expenses logged this month yet.</div>';
+    const recent = state.transactions.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.created||'').localeCompare(a.created||'')).slice(0,6);
+    document.getElementById('lg-recent').innerHTML = recent.length
+      ? recent.map(t => `<div class="lg-row"><span class="desc">${escapeHtml(t.description)}</span><span class="cat">${escapeHtml(t.category)}</span><span class="amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</span></div>`).join('')
+      : '<div class="lg-empty">Nothing logged yet.</div>';
+  }
+
+  function renderTransactions(){
+    const list = state.transactions.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.created||'').localeCompare(a.created||''));
+    const div = document.getElementById('lg-tx-list');
+    if(!list.length){ div.innerHTML = '<div class="lg-empty">No entries yet.</div>'; return; }
+    div.innerHTML = list.map(t => `
+      <div class="lg-row">
+        <span class="desc">${escapeHtml(t.description)} <span style="color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:10.5px;">${t.date}</span></span>
+        <span class="cat">${escapeHtml(t.category)}</span>
+        <span class="amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</span>
+        <button class="del" data-id="${t.id}" aria-label="Delete entry">&times;</button>
+      </div>`).join('');
+    div.querySelectorAll('.del').forEach(btn => btn.addEventListener('click', () => {
+      state.transactions = state.transactions.filter(t => t.id !== btn.dataset.id);
+      save(); renderAll();
+    }));
+  }
+
+  function renderBudgets(){
+    const mKey = new Date().toISOString().slice(0,7);
+    const spentByCat = {};
+    state.transactions.filter(t=>t.type==='expense' && monthKey(t.date)===mKey).forEach(t=>{ spentByCat[t.category] = (spentByCat[t.category]||0) + t.amount; });
+    const entries = Object.entries(state.budgets);
+    document.getElementById('lg-budget-list').innerHTML = entries.length ? entries.map(([cat, limit]) => {
+      const spent = spentByCat[cat] || 0;
+      const pct = limit > 0 ? Math.min(100, (spent/limit)*100) : 0;
+      let barClass = ''; if(spent > limit) barClass = 'over'; else if(pct > 80) barClass = 'warn';
+      return `<div class="lg-budget-item"><div class="lg-budget-top"><span class="name">${escapeHtml(cat)}</span><span class="nums">${fmt(spent)} / ${fmt(limit)}</span></div><div class="lg-bar-track"><div class="lg-bar-fill ${barClass}" style="width:${pct}%"></div></div></div>`;
+    }).join('') : '<div class="lg-empty">No budgets set yet.</div>';
+
+    const catManage = document.getElementById('lg-cat-manage');
+    catManage.innerHTML = state.categories.map(cat => `<div class="lg-row"><span class="desc">${escapeHtml(cat)}</span><button class="lg-remove-cat" data-cat="${escapeHtml(cat)}" aria-label="Remove category">&times;</button></div>`).join('');
+    catManage.querySelectorAll('.lg-remove-cat').forEach(btn => btn.addEventListener('click', () => {
+      const cat = btn.dataset.cat;
+      state.categories = state.categories.filter(c => c !== cat);
+      delete state.budgets[cat];
+      save(); populateCategorySelects(); renderAll();
+    }));
+  }
+
+  function renderSinkingFunds(){
+    const sfDiv = document.getElementById('lg-sf-list');
+    sfDiv.innerHTML = state.sinkingFunds.length ? state.sinkingFunds.map(f => {
+      const pct = f.target > 0 ? Math.min(100, (f.saved/f.target)*100) : 0;
+      return `
+        <div class="lg-sink-item">
+          <div class="lg-sink-top"><span class="name">${escapeHtml(f.name)}</span><span class="nums">${fmt(f.saved)} / ${fmt(f.target)}</span></div>
+          <div class="lg-bar-track"><div class="lg-bar-fill" style="width:${pct}%"></div></div>
+          <div class="lg-sink-actions">
+            <input type="number" placeholder="Add amount" step="0.01" data-sf-input="${f.id}">
+            <button class="lg-mini-btn" data-sf-add="${f.id}">Add</button>
+            <button class="lg-mini-btn" data-sf-del="${f.id}">Remove</button>
+          </div>
+        </div>`;
+    }).join('') : '<div class="lg-empty">No sinking funds yet.</div>';
+
+    sfDiv.querySelectorAll('[data-sf-add]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.sfAdd;
+      const input = sfDiv.querySelector(`[data-sf-input="${id}"]`);
+      const amt = parseFloat(input.value);
+      if(isNaN(amt)) return;
+      const fund = state.sinkingFunds.find(f => f.id === id);
+      if(fund){ fund.saved = Math.max(0, fund.saved + amt); input.value = ''; save(); renderSinkingFunds(); }
+    }));
+    sfDiv.querySelectorAll('[data-sf-del]').forEach(btn => btn.addEventListener('click', () => {
+      state.sinkingFunds = state.sinkingFunds.filter(f => f.id !== btn.dataset.sfDel);
+      save(); renderSinkingFunds();
+    }));
+
+    const ooDiv = document.getElementById('lg-oo-list');
+    ooDiv.innerHTML = state.oneOffs.length ? state.oneOffs.map(o => {
+      const pct = o.budget > 0 ? Math.min(100, (o.spent/o.budget)*100) : 0;
+      let barClass = ''; if(o.spent > o.budget) barClass = 'over'; else if(pct > 80) barClass = 'warn';
+      return `
+        <div class="lg-sink-item">
+          <div class="lg-sink-top"><span class="name">${escapeHtml(o.name)}</span><span class="nums">${fmt(o.spent)} / ${fmt(o.budget)}</span></div>
+          <div class="lg-bar-track"><div class="lg-bar-fill ${barClass}" style="width:${pct}%"></div></div>
+          <div class="lg-sink-actions">
+            <input type="number" placeholder="Add spend" step="0.01" data-oo-input="${o.id}">
+            <button class="lg-mini-btn" data-oo-add="${o.id}">Add</button>
+            <button class="lg-mini-btn" data-oo-del="${o.id}">Remove</button>
+          </div>
+        </div>`;
+    }).join('') : '<div class="lg-empty">No non-recurrent expenses yet.</div>';
+
+    ooDiv.querySelectorAll('[data-oo-add]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.ooAdd;
+      const input = ooDiv.querySelector(`[data-oo-input="${id}"]`);
+      const amt = parseFloat(input.value);
+      if(isNaN(amt)) return;
+      const item = state.oneOffs.find(o => o.id === id);
+      if(item){ item.spent = Math.max(0, item.spent + amt); input.value = ''; save(); renderSinkingFunds(); }
+    }));
+    ooDiv.querySelectorAll('[data-oo-del]').forEach(btn => btn.addEventListener('click', () => {
+      state.oneOffs = state.oneOffs.filter(o => o.id !== btn.dataset.ooDel);
+      save(); renderSinkingFunds();
+    }));
+  }
+
+  function renderBills(){
+    const div = document.getElementById('lg-bill-list');
+    if(!state.bills.length){ div.innerHTML = '<div class="lg-empty">No recurring bills yet.</div>'; return; }
+    const mKey = new Date().toISOString().slice(0,7);
+    const sorted = state.bills.slice().sort((a,b)=> (a.dueDay||1) - (b.dueDay||1));
+    div.innerHTML = sorted.map(b => {
+      const paid = (b.paidMonths||[]).includes(mKey);
+      return `
+        <div class="lg-bill-row">
+          <div class="lg-bill-left"><span class="name">${escapeHtml(b.name)}</span><span class="meta">${b.frequency} &middot; due day ${b.dueDay}</span></div>
+          <div class="lg-bill-right">
+            <span class="lg-bill-amt">${fmt(b.amount)}</span>
+            <button class="lg-paid-check ${paid?'paid':''}" data-id="${b.id}">${paid?'Paid':'Mark paid'}</button>
+            <button class="del" data-billdel="${b.id}" aria-label="Delete bill">&times;</button>
+          </div>
+        </div>`;
+    }).join('');
+    div.querySelectorAll('.lg-paid-check').forEach(btn => btn.addEventListener('click', () => {
+      const bill = state.bills.find(b => b.id === btn.dataset.id);
+      if(!bill) return;
+      bill.paidMonths = bill.paidMonths || [];
+      const idx = bill.paidMonths.indexOf(mKey);
+      if(idx >= 0) bill.paidMonths.splice(idx,1); else bill.paidMonths.push(mKey);
+      save(); renderBills();
+    }));
+    div.querySelectorAll('[data-billdel]').forEach(btn => btn.addEventListener('click', () => {
+      state.bills = state.bills.filter(b => b.id !== btn.dataset.billdel);
+      save(); renderBills();
+    }));
+  }
+
+  function renderAll(){ renderStamp(); renderOverview(); renderTransactions(); renderBudgets(); renderSinkingFunds(); renderBills(); }
+
+  function initTabs(){
+    document.querySelectorAll('.lg-tab').forEach(tab => tab.addEventListener('click', () => {
+      document.querySelectorAll('.lg-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.lg-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    }));
+  }
+
+  function initTypeToggle(){
+    document.querySelectorAll('#lg-type-toggle button').forEach(btn => btn.addEventListener('click', () => {
+      currentTxType = btn.dataset.type;
+      document.querySelectorAll('#lg-type-toggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }));
+  }
+
+  function initAddTx(){
+    document.getElementById('lg-add-tx').addEventListener('click', () => {
+      const desc = document.getElementById('lg-tx-desc').value.trim();
+      const amount = parseFloat(document.getElementById('lg-tx-amount').value);
+      const category = document.getElementById('lg-tx-category').value;
+      const date = document.getElementById('lg-tx-date').value || todayISO();
+      if(!desc || isNaN(amount) || amount <= 0) return;
+      state.transactions.push({ id: uid(), description: desc, amount, category, type: currentTxType, date, created: new Date().toISOString() });
+      document.getElementById('lg-tx-desc').value = '';
+      document.getElementById('lg-tx-amount').value = '';
+      save(); renderAll();
+    });
+  }
+
+  function initAddBudget(){
+    document.getElementById('lg-add-budget').addEventListener('click', () => {
+      const cat = document.getElementById('lg-budget-cat').value;
+      const amount = parseFloat(document.getElementById('lg-budget-amount').value);
+      if(!cat || isNaN(amount) || amount <= 0) return;
+      state.budgets[cat] = amount;
+      document.getElementById('lg-budget-amount').value = '';
+      save(); renderBudgets();
+    });
+  }
+
+  function initAddCategory(){
+    document.getElementById('lg-add-cat').addEventListener('click', () => {
+      const input = document.getElementById('lg-new-cat');
+      const name = input.value.trim();
+      if(!name || state.categories.includes(name)) return;
+      state.categories.push(name);
+      input.value = '';
+      save(); populateCategorySelects(); renderBudgets();
+    });
+  }
+
+  function initAddSinkingFund(){
+    document.getElementById('lg-add-sf').addEventListener('click', () => {
+      const name = document.getElementById('lg-sf-name').value.trim();
+      const target = parseFloat(document.getElementById('lg-sf-target').value);
+      const saved = parseFloat(document.getElementById('lg-sf-saved').value) || 0;
+      if(!name || isNaN(target) || target <= 0) return;
+      state.sinkingFunds.push({ id: uid(), name, target, saved });
+      document.getElementById('lg-sf-name').value = '';
+      document.getElementById('lg-sf-target').value = '';
+      document.getElementById('lg-sf-saved').value = '';
+      save(); renderSinkingFunds();
+    });
+  }
+
+  function initAddOneOff(){
+    document.getElementById('lg-add-oo').addEventListener('click', () => {
+      const name = document.getElementById('lg-oo-name').value.trim();
+      const budget = parseFloat(document.getElementById('lg-oo-budget').value);
+      const spent = parseFloat(document.getElementById('lg-oo-spent').value) || 0;
+      if(!name || isNaN(budget) || budget <= 0) return;
+      state.oneOffs.push({ id: uid(), name, budget, spent });
+      document.getElementById('lg-oo-name').value = '';
+      document.getElementById('lg-oo-budget').value = '';
+      document.getElementById('lg-oo-spent').value = '';
+      save(); renderSinkingFunds();
+    });
+  }
+
+  function initAddBill(){
+    document.getElementById('lg-add-bill').addEventListener('click', () => {
+      const name = document.getElementById('lg-bill-name').value.trim();
+      const amount = parseFloat(document.getElementById('lg-bill-amount').value);
+      const day = parseInt(document.getElementById('lg-bill-day').value, 10);
+      const freq = document.getElementById('lg-bill-freq').value;
+      if(!name || isNaN(amount) || amount <= 0 || isNaN(day)) return;
+      state.bills.push({ id: uid(), name, amount, dueDay: day, frequency: freq, paidMonths: [] });
+      document.getElementById('lg-bill-name').value = '';
+      document.getElementById('lg-bill-amount').value = '';
+      document.getElementById('lg-bill-day').value = '';
+      save(); renderBills();
+    });
+  }
+
+  function init(){
+    document.getElementById('lg-today').textContent = new Date().toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    document.getElementById('lg-tx-date').value = todayISO();
+    document.getElementById('lg-google-signin').disabled = true;
+    document.getElementById('lg-google-signin').addEventListener('click', () => {
+      if(tokenClient) tokenClient.requestAccessToken();
+    });
+    document.getElementById('lg-export-btn').addEventListener('click', exportMonthToExcel);
+
+    loadLocal();
+    populateCategorySelects();
+    initTabs(); initTypeToggle(); initAddTx(); initAddBudget(); initAddCategory();
+    initAddSinkingFund(); initAddOneOff(); initAddBill();
+    renderAll();
+    waitForGoogle();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
