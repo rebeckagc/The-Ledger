@@ -31,6 +31,7 @@
   .lg-title{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-weight: 800; font-size: 20px; letter-spacing: 0.06em; margin:0; text-transform: uppercase; }
   .lg-title span{ color: var(--brand); font-weight: 800; }
   .lg-date{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; color: var(--ink-faint); text-align:right; }
+  .lg-sync-status{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; color: var(--ink-faint); margin-top: 4px; }
   .lg-balance-stamp{ display:inline-block; padding: 14px 0; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 4px 0 28px 0; }
   .lg-balance-stamp.pos{ color: var(--ink); } .lg-balance-stamp.neg{ color: var(--ink); }
   .lg-balance-stamp .lg-bal-label{ display:block; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10.5px; font-weight:500; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom:4px; }
@@ -187,8 +188,10 @@
 <div id="ledger-root">
   <div class="lg-wrap">
     <div class="lg-header">
-      <h1 class="lg-title">The <span>Ledger</span></h1>
-      <!-- Title text is transformed to uppercase via CSS (text-transform) for crisp rendering at all zoom levels -->
+      <div>
+        <h1 class="lg-title">The <span>Ledger</span></h1>
+        <div class="lg-sync-status" id="lg-sync-status">Syncing cloud...</div>
+      </div>
       <div class="lg-date" id="lg-today"></div>
     </div>
 
@@ -385,8 +388,8 @@
 <script>
 (function(){
   const STORAGE_KEY = 'ledgerAppData';
+  const BIN_ID = '669c3a3fe41b4d34e4141d8e'; // Cloud Sync Bucket ID
 
-  // ---------- Broad categories with sub-categories ----------
   const PARENT_ORDER = ['Rent and Utilities', 'Subscriptions', 'Loans'];
   const CATEGORY_PARENT_MAP = {
     'Rent': 'Rent and Utilities', 'Electricity': 'Rent and Utilities', 'Wifi': 'Rent and Utilities',
@@ -425,8 +428,7 @@
     { id: 'oo3', name: 'Tyres - Kia', budget: 2600, spent: 1800 },
     { id: 'oo4', name: 'A/C - Corolla', budget: 300, spent: 0 }
   ];
-  // Snapshot of "Spent" so far this month, pulled from the Budget Tracker sheet.
-  // Each becomes one catch-up transaction dated today so the Budgets tab reflects it immediately.
+
   const IMPORTED_SPENT_SNAPSHOT = {
     'Rent': 8800.00, 'Electricity': 1329.00, 'Wifi': 921.36,
     'Groceries': 9472.75, 'Gym': 350.00, 'Gas': 1125.00,
@@ -436,7 +438,6 @@
     'Disney Plus': 108.00, 'Netflix': 170.00, 'Eufy': 70.00, 'iCloud': 70.00, 'Spotify': 60.32
   };
 
-  // Default Needs/Wants/Savings grouping — editable per category in the Budgets tab
   const DEFAULT_CATEGORY_GROUPS = {
     'Rent':'needs', 'Electricity':'needs', 'Wifi':'needs',
     'Eufy':'wants', 'Disney Plus':'wants', 'Netflix':'wants', 'HBO Max':'wants', 'Prime':'wants', 'iCloud':'wants', 'Spotify':'wants',
@@ -453,9 +454,9 @@
   let calState = (function(){ const t = new Date(); return { year: t.getFullYear(), month: t.getMonth() }; })();
   let selectedCalDate = todayISO();
 
-  // ---------- Color palette ----------
   const PARENT_COLORS = { 'Rent and Utilities': '#3b5bdb', 'Subscriptions': '#7c51e0', 'Loans': '#e0575b' };
   const STANDALONE_PALETTE = ['#14919b','#da8b1f','#2f9e58','#d6549b','#2a3f73','#b4622a','#5c7aea','#3f9142','#c4457a','#8a6d3b'];
+  
   function getCategoryColor(cat){
     const p = getParent(cat);
     if (p && PARENT_COLORS[p]) return PARENT_COLORS[p];
@@ -470,6 +471,43 @@
   function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
   function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
   function getParent(cat){ return state.categoryParents[cat] || null; }
+
+  function setSyncStatus(msg){
+    const el = document.getElementById('lg-sync-status');
+    if(el) el.textContent = msg;
+  }
+
+  // Cloud Sync Logic
+  async function syncCloud(isSaving = false){
+    try{
+      if(isSaving){
+        setSyncStatus('Saving to cloud...');
+        await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Master-Key': '$2a$10$w3G.Z/X3z0A.C24.R.4.y.eE4R34aX6rM.a6.' },
+          body: JSON.stringify(state)
+        });
+        setSyncStatus('Synced to Cloud');
+      } else {
+        setSyncStatus('Fetching cloud state...');
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+          headers: { 'X-Master-Key': '$2a$10$w3G.Z/X3z0A.C24.R.4.y.eE4R34aX6rM.a6.' }
+        });
+        if(res.ok){
+          const cloudData = await res.json();
+          if(cloudData.record && cloudData.record.updatedAt > (state.updatedAt || 0)){
+            state = Object.assign(state, cloudData.record);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            populateCategorySelects();
+            renderAll();
+          }
+        }
+        setSyncStatus('Synced to Cloud');
+      }
+    } catch(e){
+      setSyncStatus('Offline Mode (Local Saved)');
+    }
+  }
 
   function loadLocal(){
     try{
@@ -503,9 +541,8 @@
   function save(){
     state.updatedAt = Date.now();
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.error(e); }
+    syncCloud(true);
   }
-
-  // ---------- Excel export ----------
 
   function exportMonthToExcel(){
     const mKey = new Date().toISOString().slice(0,7);
@@ -551,8 +588,6 @@
     XLSX.writeFile(wb, `Ledger-${mKey}.xlsx`);
   }
 
-  // ---------- Rendering ----------
-
   function populateCategorySelects(){
     [document.getElementById('lg-tx-category'), document.getElementById('lg-budget-cat')].forEach(sel => {
       const prevVal = sel.value;
@@ -576,8 +611,6 @@
       if(state.categories.includes(prevVal)) sel.value = prevVal;
     });
   }
-
-  // ----- Accounts -----
 
   function totalAssets(){
     const accountsTotal = state.accounts.reduce((s,a)=>s+a.balance,0);
@@ -631,8 +664,6 @@
     const label = balance >= 0 ? 'BALANCE THIS MONTH' : 'OVER BUDGET THIS MONTH';
     wrap.innerHTML = `<div class="lg-balance-stamp ${cls}"><span class="lg-bal-label">${label}</span>${fmt(balance)}</div>`;
   }
-
-  // ----- Calendar -----
 
   function billsDueOnDay(day){ return state.bills.filter(b => Number(b.dueDay) === day); }
 
@@ -731,12 +762,7 @@
     });
   }
 
-  function renderCalendarDots(){
-    // lightweight refresh of just the dots/selection without rebuilding the whole grid
-    renderCalendar();
-  }
-
-  // ----- Overview donuts -----
+  function renderCalendarDots(){ renderCalendar(); }
 
   function renderDonutChart(income, expense){
     const balance = income - expense;
@@ -1203,6 +1229,8 @@
     initTabs(); initTypeToggle(); initAddTx(); initAddBudget(); initAddCategory();
     initAddSinkingFund(); initAddOneOff(); initAddBill(); initAddDebt(); initAddAccount();
     renderAll();
+
+    syncCloud(false);
   }
 
   init();
