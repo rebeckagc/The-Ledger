@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Ledger</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<meta name="theme-color" content="#0a0a0a">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #ffffff; --surface: #ffffff; --line: #e4e4e4; --line-strong: #cfcfcf;
+    --ink: #0a0a0a; --ink-soft: #6d6d6d; --ink-faint: #a3a3a3;
+    --over: #0a0a0a; --pill: #f2f2f2;
+    --ok: #2f8f4e; --warn: #d98c1f; --danger: #c0392b;
+    --brand: #7c93e8; --accent-purple: #ad93f0; --accent-teal: #6cc9c0;
+    --tabbar-h: 68px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; }
+  body{
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink); min-height: 100vh;
+  }
+  #ledger-root{ position:relative; min-height:100vh; }
+  .lg-wrap{ max-width: 720px; margin: 0 auto; padding: max(40px, env(safe-area-inset-top)) 24px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 28px) 24px; }
+  .lg-header{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 1px solid var(--ink); padding-bottom: 16px; margin-bottom: 16px; }
+  .lg-title{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-weight: 800; font-size: 20px; letter-spacing: 0.06em; margin:0; text-transform: uppercase; }
+  .lg-title span{ color: var(--brand); font-weight: 800; }
+  .lg-date{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; color: var(--ink-faint); text-align:right; }
+  .lg-balance-stamp{ display:inline-block; padding: 14px 0; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 4px 0 28px 0; }
+  .lg-balance-stamp.pos{ color: var(--ink); } .lg-balance-stamp.neg{ color: var(--ink); }
+  .lg-balance-stamp .lg-bal-label{ display:block; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10.5px; font-weight:500; letter-spacing: 0.08em; color: var(--ink-faint); margin-bottom:4px; }
+
+  /* Bottom tab bar */
+  .lg-bottom-tabs{
+    position:fixed; left:0; right:0; bottom:0; z-index:50;
+    display:flex; background:#fff; border-top:1px solid var(--line);
+    padding: 6px 2px calc(6px + env(safe-area-inset-bottom)) 2px;
+  }
+  .lg-bottom-tab{
+    flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:none; border:none; cursor:pointer; padding:7px 2px 5px 2px; color: var(--ink-faint);
+    font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 10px; font-weight:500; letter-spacing:0.01em;
+  }
+  .lg-bottom-tab svg{ width:21px; height:21px; }
+  .lg-bottom-tab .lbl{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .lg-bottom-tab.active{ color: var(--brand); }
+  .lg-bottom-tab.active svg{ transform: translateY(-1px); }
+
+  .lg-panel{ display:none; } .lg-panel.active{ display:block; animation: fade .2s ease; }
+  @keyframes fade{ from{opacity:0} to{opacity:1} }
+  .lg-card{ background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 20px; margin-bottom: 16px; }
+  .lg-card h2{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; margin: 0 0 14px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  .lg-card h3{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); margin: 18px 0 8px 0; }
+  .lg-card h3:first-of-type{ margin-top: 0; }
+  .lg-summary-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .lg-donut-wrap{ display:flex; align-items:center; gap:28px; flex-wrap:wrap; }
+  .lg-donut{ position:relative; width:150px; height:150px; flex-shrink:0; }
+  .lg-donut svg{ width:100%; height:100%; }
+  .lg-donut-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  .lg-donut-center .amt{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-weight:700; font-size:19px; color:var(--ink); }
+  .lg-donut-center .lbl{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size:9px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.06em; margin-top:3px; }
+  .lg-donut-legend{ display:flex; flex-direction:column; gap:10px; font-size:13.5px; flex:1; min-width:140px; }
+  .lg-donut-legend .item{ display:flex; align-items:center; gap:9px; }
+  .lg-donut-legend .dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .lg-donut-legend .dot.spent{ background:var(--brand); }
+  .lg-donut-legend .dot.balance{ background:var(--line-strong); }
+  .lg-donut-legend .dot.over{ background:var(--danger); }
+  .lg-donut-legend .amt{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-weight:600; margin-left:auto; }
+  .lg-summary-item{ text-align:center; }
+  .lg-summary-item .label{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing:0.05em; }
+  .lg-summary-item .value{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 18px; font-weight: 600; margin-top: 4px; color: var(--ink); }
+  .lg-row{ display:flex; justify-content:space-between; align-items:center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; gap:6px; }
+  .lg-row:last-child{ border-bottom:none; }
+  .lg-row.sub{ padding-left: 14px; }
+  .lg-row .desc{ flex:1; min-width:0; }
+  .lg-row .cat{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; color: var(--ink-soft); background: var(--pill); padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .lg-row .amt{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-weight: 600; min-width: 78px; text-align:right; color: var(--ink); }
+  .lg-row .del{ background:none; border:none; cursor:pointer; color: var(--ink-faint); font-size: 16px; opacity: 0.7; padding:0 4px; }
+  .lg-row .del:hover{ opacity: 1; color: var(--ink); }
+  .lg-cat-group-select{ font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:11.5px; padding:4px 6px; border:1px solid var(--line-strong); border-radius:6px; background:#fff; color:var(--ink-soft); }
+  .lg-empty{ color: var(--ink-faint); font-size: 13px; padding: 6px 0; }
+  .lg-form{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+  .lg-form label{ display:block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing:0.05em; color: var(--ink-faint); margin-bottom: 4px; }
+  .lg-form input, .lg-form select{ width:100%; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 16px; padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); }
+  .lg-form input:focus, .lg-form select:focus{ outline: 2px solid var(--ink); outline-offset: 1px; }
+  .lg-form-full{ grid-column: 1 / -1; }
+  .lg-btn{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; background: var(--ink); color: #fff; border: none; padding: 11px 16px; border-radius: 8px; cursor: pointer; margin-top: 8px; width:100%; }
+  .lg-btn:hover{ background: #2a2a2a; }
+  .lg-btn:focus-visible{ outline: 2px solid var(--ink); outline-offset: 2px; }
+  .lg-btn.secondary{ background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .lg-btn.secondary:hover{ background: var(--pill); }
+  .lg-type-toggle{ display:flex; gap:6px; }
+  .lg-type-toggle button{ flex:1; padding: 9px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 12px; font-weight:500; border: 1px solid var(--line-strong); background: #fff; cursor: pointer; border-radius: 8px; color: var(--ink-soft); }
+  .lg-type-toggle button.active{ background: var(--ink); color:#fff; border-color: var(--ink); }
+  .lg-budget-item{ margin-bottom: 16px; }
+  .lg-budget-item.sub{ padding-left: 16px; }
+  .lg-budget-top{ display:flex; justify-content:space-between; align-items:baseline; font-size: 13px; margin-bottom: 6px; gap:8px; }
+  .lg-budget-top .name{ font-weight: 600; }
+  .lg-budget-top .nums{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11.5px; color: var(--ink-soft); white-space:nowrap; }
+  .lg-bar-track{ height: 6px; background: var(--pill); border-radius: 4px; overflow: hidden; }
+  .lg-bar-fill{ height: 100%; background: var(--ok); transition: width .3s ease; }
+  .lg-bar-fill.over{ background: var(--danger); }
+  .lg-bar-fill.warn{ background: var(--warn); }
+  .lg-parent-block{ margin-bottom: 22px; padding-bottom: 4px; border-bottom: 1px dashed var(--line); }
+  .lg-parent-block:last-child{ border-bottom:none; }
+  .lg-parent-head{ display:flex; justify-content:space-between; align-items:baseline; font-size: 13.5px; margin-bottom: 10px; gap:8px; }
+  .lg-parent-head .name{ font-weight: 700; }
+  .lg-parent-head .nums{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; color: var(--ink-soft); white-space:nowrap; }
+  .lg-bill-row{ display:flex; align-items:center; justify-content:space-between; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; gap:8px; }
+  .lg-bill-row:last-child{ border-bottom: none; }
+  .lg-bill-left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .lg-bill-left .name{ font-weight:600; }
+  .lg-bill-left .meta{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10.5px; color: var(--ink-faint); }
+  .lg-bill-right{ display:flex; align-items:center; gap: 8px; flex-shrink:0; }
+  .lg-bill-amt{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-weight:600; min-width: 70px; text-align:right; }
+  .lg-paid-check{ font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 11px; font-weight:500; padding: 6px 11px; border-radius: 20px; cursor: pointer; border: 1px solid var(--line-strong); background:#fff; color: var(--ink-soft); }
+  .lg-paid-check.paid{ background: var(--ink); color:#fff; border-color: var(--ink); }
+  .lg-remove-cat{ background:none; border:none; cursor:pointer; color: var(--ink-faint); opacity:0.8; font-size:14px; }
+  .lg-remove-cat:hover{ opacity:1; color: var(--ink); }
+  .lg-sink-item{ margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .lg-sink-item:last-child{ border-bottom:none; }
+  .lg-sink-top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; gap:8px; }
+  .lg-sink-top .name{ font-weight:600; font-size:13.5px; }
+  .lg-sink-top .nums{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11.5px; color: var(--ink-soft); white-space:nowrap; }
+  .lg-sink-actions{ display:flex; gap:6px; margin-top:10px; align-items:center; }
+  .lg-sink-actions input{ width:90px; font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13px; padding:7px 9px; border:1px solid var(--line-strong); border-radius:8px; }
+  .lg-mini-btn{ font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:11.5px; font-weight:500; padding:6px 12px; border-radius:20px; border:1px solid var(--line-strong); background:#fff; cursor:pointer; color:var(--ink-soft); }
+  .lg-mini-btn:hover{ color:#fff; border-color:var(--ink); background:var(--ink); }
+
+  /* Category color dots */
+  .lg-cat-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; display:inline-block; margin-right:8px; }
+  .lg-row .desc.with-dot, .lg-budget-top .name.with-dot{ display:flex; align-items:center; }
+
+  /* Accounts */
+  .lg-account-total{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 12px; font-weight:600; color: var(--ink-soft); }
+  .lg-account-row{ display:flex; align-items:center; gap:10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .lg-account-row:last-child{ border-bottom:none; }
+  .lg-owner-pill{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 9px; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; padding: 3px 8px; border-radius: 20px; color:#fff; flex-shrink:0; white-space:nowrap; }
+  .lg-account-info{ flex:1; min-width:0; }
+  .lg-account-info .bank{ font-weight:600; font-size:13.5px; }
+  .lg-account-info .num{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; color: var(--ink-faint); margin-top:2px; }
+  .lg-account-bal{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-weight:600; text-align:right; white-space:nowrap; }
+
+  /* Calendar */
+  .lg-cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
+  .lg-cal-head .lbl{ font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; font-weight:700; }
+  .lg-cal-nav{ display:flex; gap: 6px; }
+  .lg-cal-nav button{ width:28px; height:28px; border-radius:50%; border:1px solid var(--line-strong); background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--ink); }
+  .lg-cal-nav button:hover{ background: var(--pill); }
+  .lg-cal-weekdays, .lg-cal-grid{ display:grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .lg-cal-weekdays span{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 9.5px; color: var(--ink-faint); text-align:center; text-transform:uppercase; letter-spacing:0.04em; padding-bottom:4px; }
+  .lg-cal-cell{ aspect-ratio: 1 / 1; border: none; background: var(--pill); border-radius: 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: var(--ink); padding:2px; }
+  .lg-cal-cell:hover{ background: #e9e9e9; }
+  .lg-cal-cell.empty{ background:none; cursor:default; }
+  .lg-cal-cell .num{ font-size: 12.5px; font-weight:500; }
+  .lg-cal-cell.today{ box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .lg-cal-cell.selected{ background: var(--ink); color:#fff; }
+  .lg-cal-cell.selected .num{ color:#fff; }
+  .lg-cal-cell .dots{ display:flex; gap:2px; height:5px; }
+  .lg-cal-dot{ width:5px; height:5px; border-radius:50%; }
+  .lg-cal-dot.bill{ background: var(--warn); }
+  .lg-cal-dot.event{ background: var(--ink); }
+  .lg-cal-cell.selected .lg-cal-dot.bill{ background:#ffd699; }
+  .lg-cal-cell.selected .lg-cal-dot.event{ background:#fff; }
+  .lg-cal-panel{ margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .lg-cal-panel .day-lbl{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; color: var(--ink-faint); text-transform:uppercase; letter-spacing:0.05em; margin-bottom: 10px; }
+  .lg-cal-add{ display:flex; gap:6px; margin-top: 10px; }
+  .lg-cal-add input{ font-family:ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:13.5px; padding:8px 10px; border:1px solid var(--line-strong); border-radius:8px; }
+  .lg-cal-add input.name{ flex:2; min-width:0; }
+  .lg-cal-add input.amount{ flex:1; min-width:0; }
+
+  @media (max-width: 520px){
+    .lg-wrap{ padding: 28px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 20px) 16px; }
+    .lg-form{ grid-template-columns: 1fr; }
+    .lg-summary-grid{ grid-template-columns: 1fr; gap: 8px; }
+    .lg-bottom-tab .lbl{ font-size: 9.5px; }
+  }
+  @media (prefers-reduced-motion: reduce){ .lg-panel.active{ animation: none; } .lg-bar-fill{ transition: none; } }
+</style>
+</head>
+<body>
+<div id="ledger-root">
+  <div class="lg-wrap">
+    <div class="lg-header">
+      <h1 class="lg-title">The <span>Ledger</span></h1>
+      <!-- Title text is transformed to uppercase via CSS (text-transform) for crisp rendering at all zoom levels -->
+      <div class="lg-date" id="lg-today"></div>
+    </div>
+
+    <div id="lg-stamp-wrap"></div>
+
+    <div class="lg-panel active" id="panel-overview">
+      <div class="lg-card">
+        <h2>Calendar <span style="font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size:10px; font-weight:500; color:var(--ink-faint);">Tap a day to add a payment</span></h2>
+        <div id="lg-cal-wrap"></div>
+      </div>
+      <div class="lg-card">
+        <h2>Accounts <span class="lg-account-total" id="lg-account-total"></span></h2>
+        <div class="lg-form">
+          <div><label>Owner</label>
+            <select id="lg-acc-owner">
+              <option value="Mine">Mine</option>
+              <option value="Husband">Husband</option>
+              <option value="Joint">Joint</option>
+            </select>
+          </div>
+          <div><label>Bank</label><input type="text" id="lg-acc-bank" placeholder="e.g. First Citizens"></div>
+          <div><label>Account number</label><input type="text" id="lg-acc-number" placeholder="e.g. 1234567890"></div>
+          <div><label>Balance</label><input type="number" id="lg-acc-balance" placeholder="0.00" step="0.01"></div>
+        </div>
+        <button class="lg-btn secondary" id="lg-add-acc">Add account</button>
+        <div id="lg-acc-list" style="margin-top:8px;"></div>
+      </div>
+      <div class="lg-card">
+        <h2>Spending Overview</h2>
+        <div class="lg-donut-wrap">
+          <div class="lg-donut" id="lg-donut"></div>
+          <div class="lg-donut-legend" id="lg-donut-legend"></div>
+        </div>
+      </div>
+      <div class="lg-card">
+        <h2>Needs / Wants / Savings</h2>
+        <div class="lg-donut-wrap">
+          <div class="lg-donut" id="lg-nws-donut"></div>
+          <div class="lg-donut-legend" id="lg-nws-legend"></div>
+        </div>
+      </div>
+      <div class="lg-card">
+        <h2>This Month <button class="lg-mini-btn" id="lg-export-btn">Export month to Excel</button></h2>
+        <div class="lg-summary-grid" id="lg-summary"></div>
+      </div>
+      <div class="lg-card"><h2>By Category</h2><div id="lg-cat-breakdown"></div></div>
+      <div class="lg-card"><h2>Recent Entries</h2><div id="lg-recent"></div></div>
+    </div>
+
+    <div class="lg-panel" id="panel-transactions">
+      <div class="lg-card">
+        <h2>Add Entry</h2>
+        <div class="lg-type-toggle" id="lg-type-toggle">
+          <button class="sel-expense active" data-type="expense">Expense</button>
+          <button class="sel-income" data-type="income">Income</button>
+        </div>
+        <div class="lg-form" style="margin-top:10px;">
+          <div><label>Description</label><input type="text" id="lg-tx-desc" placeholder="e.g. Groceries"></div>
+          <div><label>Amount</label><input type="number" id="lg-tx-amount" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Category</label><select id="lg-tx-category"></select></div>
+          <div><label>Date</label><input type="date" id="lg-tx-date"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-tx">Add entry</button>
+      </div>
+      <div class="lg-card"><h2>All Entries</h2><div id="lg-tx-list"></div></div>
+    </div>
+
+    <div class="lg-panel" id="panel-budgets">
+      <div class="lg-card">
+        <h2>Set a Monthly Budget</h2>
+        <div class="lg-form">
+          <div><label>Category</label><select id="lg-budget-cat"></select></div>
+          <div><label>Monthly limit</label><input type="number" id="lg-budget-amount" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-budget">Save budget</button>
+      </div>
+      <div class="lg-card"><h2>Progress This Month</h2><div id="lg-budget-list"></div></div>
+      <div class="lg-card">
+        <h2>Categories</h2>
+        <div id="lg-cat-manage"></div>
+        <div class="lg-form" style="margin-top:10px;">
+          <div><label>New category name</label><input type="text" id="lg-new-cat" placeholder="e.g. Subscriptions"></div>
+          <div><label>Broad category</label>
+            <select id="lg-new-cat-parent">
+              <option value="">None (standalone)</option>
+              <option value="Rent and Utilities">Rent and Utilities</option>
+              <option value="Subscriptions">Subscriptions</option>
+              <option value="Loans">Loans</option>
+            </select>
+          </div>
+          <div><label>Needs / Wants / Savings</label>
+            <select id="lg-new-cat-group">
+              <option value="needs">Needs</option>
+              <option value="wants" selected>Wants</option>
+              <option value="savings">Savings</option>
+            </select>
+          </div>
+        </div>
+        <button class="lg-btn secondary" id="lg-add-cat">Add category</button>
+      </div>
+    </div>
+
+    <div class="lg-panel" id="panel-sinking">
+      <div class="lg-card">
+        <h2>Add a Sinking Fund</h2>
+        <p style="font-size:12.5px; color:var(--ink-soft); margin-top:-6px;">Money you're setting aside toward a goal &mdash; an emergency fund, a savings target, a specific pot.</p>
+        <div class="lg-form">
+          <div><label>Name</label><input type="text" id="lg-sf-name" placeholder="e.g. Emergency Fund"></div>
+          <div><label>Target amount</label><input type="number" id="lg-sf-target" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Already saved</label><input type="number" id="lg-sf-saved" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-sf">Add sinking fund</button>
+      </div>
+      <div class="lg-card"><h2>Sinking Funds</h2><div id="lg-sf-list"></div></div>
+
+      <div class="lg-card">
+        <h2>Add a Non-Recurrent Expense</h2>
+        <p style="font-size:12.5px; color:var(--ink-soft); margin-top:-6px;">One-off or irregular costs &mdash; insurance renewals, repairs, a big exam fee.</p>
+        <div class="lg-form">
+          <div><label>Name</label><input type="text" id="lg-oo-name" placeholder="e.g. Vehicle Insurance"></div>
+          <div><label>Budgeted amount</label><input type="number" id="lg-oo-budget" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Spent so far</label><input type="number" id="lg-oo-spent" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-oo">Add expense</button>
+      </div>
+      <div class="lg-card"><h2>Non-Recurrent Expenses</h2><div id="lg-oo-list"></div></div>
+    </div>
+
+    <div class="lg-panel" id="panel-bills">
+      <div class="lg-card">
+        <h2>Add Recurring Bill</h2>
+        <div class="lg-form">
+          <div><label>Name</label><input type="text" id="lg-bill-name" placeholder="e.g. Rent"></div>
+          <div><label>Amount</label><input type="number" id="lg-bill-amount" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Due day of month</label><input type="number" id="lg-bill-day" placeholder="1-31" min="1" max="31"></div>
+          <div><label>Frequency</label><select id="lg-bill-freq"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="yearly">Yearly</option></select></div>
+        </div>
+        <button class="lg-btn" id="lg-add-bill">Add bill</button>
+      </div>
+      <div class="lg-card"><h2>Upcoming &amp; Recurring</h2><div id="lg-bill-list"></div></div>
+    </div>
+
+    <div class="lg-panel" id="panel-debt">
+      <div class="lg-card">
+        <h2>Net Worth</h2>
+        <div class="lg-summary-grid" id="lg-networth-summary"></div>
+      </div>
+      <div class="lg-card">
+        <h2>Total Debt Summary</h2>
+        <div class="lg-summary-grid" id="lg-debt-summary"></div>
+      </div>
+      <div class="lg-card">
+        <h2>Add a Debt</h2>
+        <div class="lg-form">
+          <div><label>Name</label><input type="text" id="lg-debt-name" placeholder="e.g. Credit Card 7855"></div>
+          <div><label>Balance owed</label><input type="number" id="lg-debt-balance" placeholder="0.00" step="0.01" min="0"></div>
+          <div><label>Interest rate (%)</label><input type="number" id="lg-debt-rate" placeholder="0.0" step="0.01" min="0"></div>
+          <div><label>Minimum payment</label><input type="number" id="lg-debt-min" placeholder="0.00" step="0.01" min="0"></div>
+        </div>
+        <button class="lg-btn" id="lg-add-debt">Add debt</button>
+      </div>
+      <div class="lg-card"><h2>Debts</h2><div id="lg-debt-list"></div></div>
+    </div>
+  </div>
+
+  <nav class="lg-bottom-tabs" role="tablist">
+    <button class="lg-bottom-tab active" data-tab="overview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg>
+      <span class="lbl">Overview</span>
+    </button>
+    <button class="lg-bottom-tab" data-tab="transactions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+      <span class="lbl">Entries</span>
+    </button>
+    <button class="lg-bottom-tab" data-tab="budgets">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15.6a10 10 0 1 1-9-13.5"/><path d="M12 12 21.5 8"/></svg>
+      <span class="lbl">Budgets</span>
+    </button>
+    <button class="lg-bottom-tab" data-tab="sinking">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21"/></svg>
+      <span class="lbl">Funds</span>
+    </button>
+    <button class="lg-bottom-tab" data-tab="bills">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17"/><path d="M8 3v3.5M16 3v3.5"/></svg>
+      <span class="lbl">Bills</span>
+    </button>
+    <button class="lg-bottom-tab" data-tab="debt">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.2"/><path d="M2.5 10h19"/><path d="M6 14.5h4"/></svg>
+      <span class="lbl">Debt</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'ledgerAppData';
+
+  // ---------- Broad categories with sub-categories ----------
+  const PARENT_ORDER = ['Rent and Utilities', 'Subscriptions', 'Loans'];
+  const CATEGORY_PARENT_MAP = {
+    'Rent': 'Rent and Utilities', 'Electricity': 'Rent and Utilities', 'Wifi': 'Rent and Utilities',
+    'Eufy': 'Subscriptions', 'Disney Plus': 'Subscriptions', 'Netflix': 'Subscriptions',
+    'HBO Max': 'Subscriptions', 'Prime': 'Subscriptions', 'iCloud': 'Subscriptions', 'Spotify': 'Subscriptions',
+    'Sportage': 'Loans', 'FCB': 'Loans'
+  };
+
+  const DEFAULT_CATEGORIES = [
+    'Rent','Electricity','Wifi',
+    'Eufy','Disney Plus','Netflix','HBO Max','Prime','iCloud','Spotify',
+    'Sportage','FCB',
+    'Groceries','Yav','Chantelle','Gym','Gas','Dogs',
+    'Credit Card Min. 4680','Credit Card 7855','Credit Card 7007',
+    'Supplements','Rebecka Grooming','Jhonel Grooming','Medication',
+    'Food','Jhonel','Rebecka','Massages','Misc','Amazon','WebSource','Household','Karen','Income'
+  ];
+
+  const DEFAULT_BUDGETS = {
+    'Rent': 8800, 'Electricity': 600, 'Wifi': 920,
+    'Eufy': 70, 'Disney Plus': 108, 'Netflix': 170, 'iCloud': 70, 'Spotify': 60.32,
+    'Sportage': 2202, 'FCB': 1850,
+    'Groceries': 5500, 'Yav': 800, 'Chantelle': 300, 'Gym': 350, 'Gas': 1800, 'Dogs': 1200,
+    'Credit Card Min. 4680': 1381, 'Credit Card 7007': 5000, 'Supplements': 600,
+    'Rebecka Grooming': 600, 'Jhonel Grooming': 600, 'Medication': 2050,
+    'Food': 1500, 'Jhonel': 1000, 'Rebecka': 1000, 'Massages': 1000
+  };
+  const DEFAULT_SINKING_FUNDS = [
+    { id: 'sf1', name: 'Emergency Fund', target: 5000, saved: 1000 },
+    { id: 'sf2', name: 'Savings USD', target: 755, saved: 755 },
+    { id: 'sf3', name: 'Savings TTD', target: 1130, saved: 1000 }
+  ];
+  const DEFAULT_ONE_OFFS = [
+    { id: 'oo1', name: 'Vehicle Insurance - Kia', budget: 4700, spent: 4697.82 },
+    { id: 'oo2', name: 'MRCPsych', budget: 5126.61, spent: 0 },
+    { id: 'oo3', name: 'Tyres - Kia', budget: 2600, spent: 1800 },
+    { id: 'oo4', name: 'A/C - Corolla', budget: 300, spent: 0 }
+  ];
+  // Snapshot of "Spent" so far this month, pulled from the Budget Tracker sheet.
+  // Each becomes one catch-up transaction dated today so the Budgets tab reflects it immediately.
+  const IMPORTED_SPENT_SNAPSHOT = {
+    'Rent': 8800.00, 'Electricity': 1329.00, 'Wifi': 921.36,
+    'Groceries': 9472.75, 'Gym': 350.00, 'Gas': 1125.00,
+    'Dogs': 962.25, 'Sportage': 2202.00, 'FCB': 1850.00,
+    'Credit Card Min. 4680': 960.00, 'Supplements': 300.00, 'Medication': 875.40, 'Food': 1453.50,
+    'Jhonel': 135.00, 'Rebecka': 2143.30, 'Massages': 1000.00, 'Misc': 500.00, 'WebSource': 451.08,
+    'Disney Plus': 108.00, 'Netflix': 170.00, 'Eufy': 70.00, 'iCloud': 70.00, 'Spotify': 60.32
+  };
+
+  // Default Needs/Wants/Savings grouping — editable per category in the Budgets tab
+  const DEFAULT_CATEGORY_GROUPS = {
+    'Rent':'needs', 'Electricity':'needs', 'Wifi':'needs',
+    'Eufy':'wants', 'Disney Plus':'wants', 'Netflix':'wants', 'HBO Max':'wants', 'Prime':'wants', 'iCloud':'wants', 'Spotify':'wants',
+    'Sportage':'needs', 'FCB':'needs',
+    'Yav':'wants', 'Chantelle':'wants', 'Gym':'wants', 'Gas':'needs', 'Dogs':'needs',
+    'Credit Card Min. 4680':'needs', 'Credit Card 7855':'needs', 'Credit Card 7007':'needs',
+    'Supplements':'wants', 'Rebecka Grooming':'wants', 'Jhonel Grooming':'wants', 'Medication':'needs',
+    'Food':'needs', 'Jhonel':'wants', 'Rebecka':'wants', 'Massages':'wants', 'Misc':'wants',
+    'Amazon':'wants', 'WebSource':'wants', 'Household':'needs', 'Karen':'wants'
+  };
+
+  let state = { transactions: [], budgets: {}, bills: [], categories: [], sinkingFunds: [], oneOffs: [], debts: [], categoryGroups: {}, categoryParents: {}, calendarEvents: [], accounts: [], updatedAt: 0 };
+  let currentTxType = 'expense';
+  let calState = (function(){ const t = new Date(); return { year: t.getFullYear(), month: t.getMonth() }; })();
+  let selectedCalDate = todayISO();
+
+  // ---------- Color palette ----------
+  const PARENT_COLORS = { 'Rent and Utilities': '#3b5bdb', 'Subscriptions': '#7c51e0', 'Loans': '#e0575b' };
+  const STANDALONE_PALETTE = ['#14919b','#da8b1f','#2f9e58','#d6549b','#2a3f73','#b4622a','#5c7aea','#3f9142','#c4457a','#8a6d3b'];
+  function getCategoryColor(cat){
+    const p = getParent(cat);
+    if (p && PARENT_COLORS[p]) return PARENT_COLORS[p];
+    let hash = 0; for (let i = 0; i < cat.length; i++) { hash = (hash * 31 + cat.charCodeAt(i)) >>> 0; }
+    return STANDALONE_PALETTE[hash % STANDALONE_PALETTE.length];
+  }
+  const OWNER_COLORS = { 'Mine': '#3b5bdb', 'Husband': '#7c51e0', 'Joint': '#14919b' };
+
+  function fmt(n){ const sign = n < 0 ? '-' : ''; return sign + '$' + Math.abs(n).toFixed(2); }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function monthKey(dateStr){ return dateStr.slice(0,7); }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+  function getParent(cat){ return state.categoryParents[cat] || null; }
+
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){ state = Object.assign(state, JSON.parse(raw)); }
+      else seedDefaults();
+      if(!state.categories || !state.categories.length) state.categories = DEFAULT_CATEGORIES.slice();
+      if(!state.categoryGroups) state.categoryGroups = {};
+      if(!state.categoryParents) state.categoryParents = Object.assign({}, CATEGORY_PARENT_MAP);
+      if(!state.calendarEvents) state.calendarEvents = [];
+      if(!state.accounts) state.accounts = [];
+    }catch(e){ seedDefaults(); }
+  }
+
+  function seedDefaults(){
+    state.categories = DEFAULT_CATEGORIES.slice();
+    state.budgets = Object.assign({}, DEFAULT_BUDGETS);
+    state.sinkingFunds = DEFAULT_SINKING_FUNDS.map(f => Object.assign({}, f));
+    state.oneOffs = DEFAULT_ONE_OFFS.map(o => Object.assign({}, o));
+    state.categoryGroups = Object.assign({}, DEFAULT_CATEGORY_GROUPS);
+    state.categoryParents = Object.assign({}, CATEGORY_PARENT_MAP);
+    state.calendarEvents = [];
+    state.accounts = [];
+    const today = todayISO();
+    state.transactions = Object.entries(IMPORTED_SPENT_SNAPSHOT).map(([cat, amt]) => ({
+      id: uid(), description: 'Spent so far this month (imported from sheet)',
+      amount: amt, category: cat, type: 'expense', date: today, created: new Date().toISOString()
+    }));
+  }
+
+  function save(){
+    state.updatedAt = Date.now();
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){ console.error(e); }
+  }
+
+  // ---------- Excel export ----------
+
+  function exportMonthToExcel(){
+    const mKey = new Date().toISOString().slice(0,7);
+    const monthTx = state.transactions.filter(t => monthKey(t.date) === mKey);
+
+    const txRows = [['Date','Description','Category','Type','Amount']]
+      .concat(monthTx.map(t => [t.date, t.description, t.category, t.type, t.amount]));
+
+    const spentByCat = {};
+    monthTx.filter(t=>t.type==='expense').forEach(t=>{ spentByCat[t.category] = (spentByCat[t.category]||0) + t.amount; });
+    const budgetRows = [['Broad Category','Category','Budget','Spent']]
+      .concat(Object.entries(state.budgets).map(([cat,limit]) => [getParent(cat)||'', cat, limit, spentByCat[cat]||0]));
+
+    const sinkRows = [['Sinking Fund','Target','Saved']]
+      .concat(state.sinkingFunds.map(f => [f.name, f.target, f.saved]));
+
+    const oneOffRows = [['Non-Recurrent Expense','Budget','Spent']]
+      .concat(state.oneOffs.map(o => [o.name, o.budget, o.spent]));
+
+    const debtRows = [['Debt','Balance Owed','Interest Rate (%)','Minimum Payment']]
+      .concat(state.debts.map(d => [d.name, d.balance, d.rate, d.minPayment]));
+
+    const calRows = [['Date','Payment','Amount']]
+      .concat(state.calendarEvents.filter(e=>monthKey(e.date)===mKey).map(e => [e.date, e.name, e.amount||'']));
+
+    const accountRows = [['Owner','Bank','Account Number','Balance']]
+      .concat(state.accounts.map(a => [a.owner, a.bank, a.accountNumber||'', a.balance]));
+    const assets = totalAssets();
+    const totalDebt = state.debts.reduce((s,d)=>s+d.balance,0);
+    accountRows.push([]);
+    accountRows.push(['Total Assets', '', '', assets]);
+    accountRows.push(['Total Liabilities', '', '', totalDebt]);
+    accountRows.push(['Net Worth', '', '', assets - totalDebt]);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txRows), 'Transactions');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(budgetRows), 'Budgets');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sinkRows), 'Sinking Funds');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(oneOffRows), 'Non-Recurrent');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(debtRows), 'Debt');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(calRows), 'Payments Due');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(accountRows), 'Accounts & Net Worth');
+    XLSX.writeFile(wb, `Ledger-${mKey}.xlsx`);
+  }
+
+  // ---------- Rendering ----------
+
+  function populateCategorySelects(){
+    [document.getElementById('lg-tx-category'), document.getElementById('lg-budget-cat')].forEach(sel => {
+      const prevVal = sel.value;
+      sel.innerHTML = '';
+      const byParent = {}; const standalone = [];
+      state.categories.forEach(cat => {
+        const p = getParent(cat);
+        if(p){ (byParent[p] = byParent[p] || []).push(cat); } else { standalone.push(cat); }
+      });
+      PARENT_ORDER.forEach(p => {
+        if(!byParent[p] || !byParent[p].length) return;
+        const grp = document.createElement('optgroup'); grp.label = p;
+        byParent[p].forEach(cat => { const opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; grp.appendChild(opt); });
+        sel.appendChild(grp);
+      });
+      if(standalone.length){
+        const grp = document.createElement('optgroup'); grp.label = 'Other';
+        standalone.forEach(cat => { const opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; grp.appendChild(opt); });
+        sel.appendChild(grp);
+      }
+      if(state.categories.includes(prevVal)) sel.value = prevVal;
+    });
+  }
+
+  // ----- Accounts -----
+
+  function totalAssets(){
+    const accountsTotal = state.accounts.reduce((s,a)=>s+a.balance,0);
+    const sinkingTotal = state.sinkingFunds.reduce((s,f)=>s+f.saved,0);
+    return accountsTotal + sinkingTotal;
+  }
+
+  function renderAccounts(){
+    const total = state.accounts.reduce((s,a)=>s+a.balance,0);
+    document.getElementById('lg-account-total').textContent = fmt(total) + ' total';
+    const div = document.getElementById('lg-acc-list');
+    if(!state.accounts.length){ div.innerHTML = '<div class="lg-empty">No accounts added yet.</div>'; return; }
+    div.innerHTML = state.accounts.slice().sort((a,b)=>a.owner.localeCompare(b.owner)).map(a => `
+      <div class="lg-account-row">
+        <span class="lg-owner-pill" style="background:${OWNER_COLORS[a.owner]||'var(--ink-soft)'}">${escapeHtml(a.owner)}</span>
+        <div class="lg-account-info">
+          <div class="bank">${escapeHtml(a.bank)}</div>
+          <div class="num">${escapeHtml(a.accountNumber||'')}</div>
+        </div>
+        <span class="lg-account-bal">${fmt(a.balance)}</span>
+        <button class="del" data-acc-del="${a.id}" aria-label="Remove account">&times;</button>
+      </div>`).join('');
+    div.querySelectorAll('[data-acc-del]').forEach(btn => btn.addEventListener('click', () => {
+      state.accounts = state.accounts.filter(a => a.id !== btn.dataset.accDel);
+      save(); renderAccounts(); renderDebts();
+    }));
+  }
+
+  function initAddAccount(){
+    document.getElementById('lg-add-acc').addEventListener('click', () => {
+      const owner = document.getElementById('lg-acc-owner').value;
+      const bank = document.getElementById('lg-acc-bank').value.trim();
+      const accountNumber = document.getElementById('lg-acc-number').value.trim();
+      const balance = parseFloat(document.getElementById('lg-acc-balance').value);
+      if(!bank || isNaN(balance)) return;
+      state.accounts.push({ id: uid(), owner, bank, accountNumber, balance });
+      document.getElementById('lg-acc-bank').value = '';
+      document.getElementById('lg-acc-number').value = '';
+      document.getElementById('lg-acc-balance').value = '';
+      save(); renderAccounts(); renderDebts();
+    });
+  }
+
+  function renderStamp(){
+    const wrap = document.getElementById('lg-stamp-wrap');
+    const mKey = new Date().toISOString().slice(0,7);
+    let income = 0, expense = 0;
+    state.transactions.forEach(t => { if(monthKey(t.date) === mKey){ if(t.type === 'income') income += t.amount; else expense += t.amount; } });
+    const balance = income - expense;
+    const cls = balance >= 0 ? 'pos' : 'neg';
+    const label = balance >= 0 ? 'BALANCE THIS MONTH' : 'OVER BUDGET THIS MONTH';
+    wrap.innerHTML = `<div class="lg-balance-stamp ${cls}"><span class="lg-bal-label">${label}</span>${fmt(balance)}</div>`;
+  }
+
+  // ----- Calendar -----
+
+  function billsDueOnDay(day){ return state.bills.filter(b => Number(b.dueDay) === day); }
+
+  function renderCalendar(){
+    const wrap = document.getElementById('lg-cal-wrap');
+    const { year, month } = calState;
+    const first = new Date(year, month, 1);
+    const startWeekday = first.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthLabel = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+    const todayStr = todayISO();
+
+    let cells = '';
+    for (let i = 0; i < startWeekday; i++) cells += `<div class="lg-cal-cell empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${monthPrefix}-${String(d).padStart(2, '0')}`;
+      const dayEvents = state.calendarEvents.filter(e => e.date === dateStr);
+      const dayBills = billsDueOnDay(d);
+      let dots = '';
+      if (dayBills.length) dots += `<span class="lg-cal-dot bill"></span>`;
+      if (dayEvents.length) dots += `<span class="lg-cal-dot event"></span>`;
+      const cls = ['lg-cal-cell'];
+      if (dateStr === todayStr) cls.push('today');
+      if (dateStr === selectedCalDate) cls.push('selected');
+      cells += `<button type="button" class="${cls.join(' ')}" data-date="${dateStr}"><span class="num">${d}</span><span class="dots">${dots}</span></button>`;
+    }
+
+    wrap.innerHTML = `
+      <div class="lg-cal-head">
+        <div class="lg-cal-nav"><button type="button" id="lg-cal-prev" aria-label="Previous month">&larr;</button></div>
+        <span class="lbl">${monthLabel}</span>
+        <div class="lg-cal-nav"><button type="button" id="lg-cal-next" aria-label="Next month">&rarr;</button></div>
+      </div>
+      <div class="lg-cal-weekdays"><span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span></div>
+      <div class="lg-cal-grid">${cells}</div>
+      <div class="lg-cal-panel" id="lg-cal-panel"></div>
+    `;
+
+    document.getElementById('lg-cal-prev').addEventListener('click', () => {
+      calState.month -= 1; if (calState.month < 0) { calState.month = 11; calState.year -= 1; }
+      renderCalendar();
+    });
+    document.getElementById('lg-cal-next').addEventListener('click', () => {
+      calState.month += 1; if (calState.month > 11) { calState.month = 0; calState.year += 1; }
+      renderCalendar();
+    });
+    wrap.querySelectorAll('[data-date]').forEach(btn => btn.addEventListener('click', () => {
+      selectedCalDate = btn.dataset.date;
+      renderCalendar();
+    }));
+
+    renderCalendarPanel();
+  }
+
+  function renderCalendarPanel(){
+    const panel = document.getElementById('lg-cal-panel');
+    if (!panel) return;
+    const d = new Date(selectedCalDate + 'T00:00:00');
+    const dayOfMonth = d.getDate();
+    const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    const dayBills = billsDueOnDay(dayOfMonth);
+    const dayEvents = state.calendarEvents.filter(e => e.date === selectedCalDate);
+
+    let rows = '';
+    dayBills.forEach(b => {
+      rows += `<div class="lg-row"><span class="desc">${escapeHtml(b.name)}</span><span class="cat">recurring bill</span><span class="amt">${fmt(b.amount)}</span></div>`;
+    });
+    dayEvents.forEach(e => {
+      rows += `<div class="lg-row"><span class="desc">${escapeHtml(e.name)}</span><span class="cat">payment due</span><span class="amt">${e.amount ? fmt(e.amount) : '&mdash;'}</span><button class="del" data-cal-del="${e.id}" aria-label="Remove payment">&times;</button></div>`;
+    });
+
+    panel.innerHTML = `
+      <div class="day-lbl">${label}</div>
+      ${rows || '<div class="lg-empty">Nothing due this day yet.</div>'}
+      <div class="lg-cal-add">
+        <input type="text" class="name" id="lg-cal-name" placeholder="Payment name">
+        <input type="number" class="amount" id="lg-cal-amount" placeholder="Amount (optional)" step="0.01" min="0">
+        <button class="lg-mini-btn" id="lg-cal-add-btn">Add</button>
+      </div>
+    `;
+
+    panel.querySelectorAll('[data-cal-del]').forEach(btn => btn.addEventListener('click', () => {
+      state.calendarEvents = state.calendarEvents.filter(e => e.id !== btn.dataset.calDel);
+      save(); renderCalendarPanel(); renderCalendarDots();
+    }));
+    panel.querySelector('#lg-cal-add-btn').addEventListener('click', () => {
+      const nameInput = document.getElementById('lg-cal-name');
+      const amtInput = document.getElementById('lg-cal-amount');
+      const name = nameInput.value.trim();
+      if (!name) return;
+      const amount = parseFloat(amtInput.value);
+      state.calendarEvents.push({ id: uid(), name, amount: isNaN(amount) ? null : amount, date: selectedCalDate });
+      save();
+      renderCalendarPanel(); renderCalendarDots();
+    });
+  }
+
+  function renderCalendarDots(){
+    // lightweight refresh of just the dots/selection without rebuilding the whole grid
+    renderCalendar();
+  }
+
+  // ----- Overview donuts -----
+
+  function renderDonutChart(income, expense){
+    const balance = income - expense;
+    const base = income > 0 ? income : (expense || Object.values(state.budgets).reduce((s,v)=>s+v,0) || 1);
+    const over = expense > base;
+    const r = 62, circ = 2 * Math.PI * r;
+    const spentFrac = over ? 1 : (base > 0 ? Math.min(1, expense / base) : 0);
+    const spentLen = circ * spentFrac;
+    const strokeColor = over ? 'var(--danger)' : 'var(--brand)';
+
+    document.getElementById('lg-donut').innerHTML = `
+      <svg viewBox="0 0 150 150">
+        <circle cx="75" cy="75" r="${r}" fill="none" stroke="var(--pill)" stroke-width="18"/>
+        <circle cx="75" cy="75" r="${r}" fill="none" stroke="${strokeColor}" stroke-width="18"
+          stroke-dasharray="${spentLen} ${circ - spentLen}" stroke-linecap="butt"
+          transform="rotate(-90 75 75)"/>
+      </svg>
+      <div class="lg-donut-center">
+        <span class="amt">${fmt(balance)}</span>
+        <span class="lbl">${balance >= 0 ? 'Balance' : 'Over Budget'}</span>
+      </div>
+    `;
+
+    document.getElementById('lg-donut-legend').innerHTML = `
+      <div class="item"><span class="dot ${over ? 'over' : 'spent'}"></span>Spent this month<span class="amt">${fmt(expense)}</span></div>
+      <div class="item"><span class="dot balance"></span>${income > 0 ? 'Income' : 'Budgeted'}<span class="amt">${fmt(base)}</span></div>
+    `;
+  }
+
+  function renderNWSChart(monthTx){
+    const totals = { needs: 0, wants: 0, savings: 0 };
+    monthTx.filter(t => t.type === 'expense').forEach(t => {
+      const g = state.categoryGroups[t.category] || 'wants';
+      totals[g] = (totals[g] || 0) + t.amount;
+    });
+    const total = totals.needs + totals.wants + totals.savings;
+    const r = 62, circ = 2 * Math.PI * r;
+    const segments = [
+      { key: 'needs', label: 'Needs', color: 'var(--brand)', val: totals.needs },
+      { key: 'wants', label: 'Wants', color: 'var(--accent-purple)', val: totals.wants },
+      { key: 'savings', label: 'Savings', color: 'var(--accent-teal)', val: totals.savings }
+    ];
+
+    let cumulative = 0;
+    const arcs = segments.map(seg => {
+      const frac = total > 0 ? seg.val / total : 0;
+      const len = circ * frac;
+      const arc = `<circle cx="75" cy="75" r="${r}" fill="none" stroke="${seg.color}" stroke-width="18"
+        stroke-dasharray="${len} ${circ - len}" stroke-dashoffset="${-cumulative}" stroke-linecap="butt"
+        transform="rotate(-90 75 75)"/>`;
+      cumulative += len;
+      return arc;
+    }).join('');
+
+    document.getElementById('lg-nws-donut').innerHTML = total > 0 ? `
+      <svg viewBox="0 0 150 150">
+        <circle cx="75" cy="75" r="${r}" fill="none" stroke="var(--pill)" stroke-width="18"/>
+        ${arcs}
+      </svg>
+      <div class="lg-donut-center">
+        <span class="amt">${fmt(total)}</span>
+        <span class="lbl">Total Spent</span>
+      </div>
+    ` : `
+      <svg viewBox="0 0 150 150"><circle cx="75" cy="75" r="${r}" fill="none" stroke="var(--pill)" stroke-width="18"/></svg>
+      <div class="lg-donut-center"><span class="lbl">No spending yet</span></div>
+    `;
+
+    document.getElementById('lg-nws-legend').innerHTML = segments.map(seg => {
+      const pct = total > 0 ? Math.round((seg.val / total) * 100) : 0;
+      return `<div class="item"><span class="dot" style="background:${seg.color}"></span>${seg.label} &middot; ${pct}%<span class="amt">${fmt(seg.val)}</span></div>`;
+    }).join('');
+  }
+
+  function renderOverview(){
+    const mKey = new Date().toISOString().slice(0,7);
+    const monthTx = state.transactions.filter(t => monthKey(t.date) === mKey);
+    const income = monthTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const expense = monthTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    renderDonutChart(income, expense);
+    renderNWSChart(monthTx);
+    document.getElementById('lg-summary').innerHTML = `
+      <div class="lg-summary-item"><div class="label">Income</div><div class="value income">${fmt(income)}</div></div>
+      <div class="lg-summary-item"><div class="label">Expenses</div><div class="value expense">${fmt(expense)}</div></div>
+      <div class="lg-summary-item"><div class="label">Balance</div><div class="value">${fmt(income-expense)}</div></div>
+    `;
+
+    const byCat = {};
+    monthTx.filter(t=>t.type==='expense').forEach(t=>{ byCat[t.category] = (byCat[t.category]||0) + t.amount; });
+
+    const byParent = {}; const standaloneEntries = [];
+    Object.entries(byCat).forEach(([cat, amt]) => {
+      const p = getParent(cat);
+      if (p) { (byParent[p] = byParent[p] || []).push([cat, amt]); } else { standaloneEntries.push([cat, amt]); }
+    });
+
+    let html = '';
+    PARENT_ORDER.forEach(p => {
+      const entries = byParent[p];
+      if (!entries || !entries.length) return;
+      entries.sort((a,b)=>b[1]-a[1]);
+      const total = entries.reduce((s,e)=>s+e[1],0);
+      html += `<div class="lg-row"><span class="desc with-dot" style="font-weight:700;"><span class="lg-cat-dot" style="background:${PARENT_COLORS[p]}"></span>${escapeHtml(p)}</span><span class="amt expense">${fmt(total)}</span></div>`;
+      entries.forEach(([cat, amt]) => {
+        html += `<div class="lg-row sub"><span class="desc with-dot"><span class="lg-cat-dot" style="background:${getCategoryColor(cat)}"></span>${escapeHtml(cat)}</span><span class="amt expense">${fmt(amt)}</span></div>`;
+      });
+    });
+    standaloneEntries.sort((a,b)=>b[1]-a[1]).forEach(([cat, amt]) => {
+      html += `<div class="lg-row"><span class="desc with-dot"><span class="lg-cat-dot" style="background:${getCategoryColor(cat)}"></span>${escapeHtml(cat)}</span><span class="amt expense">${fmt(amt)}</span></div>`;
+    });
+    document.getElementById('lg-cat-breakdown').innerHTML = html || '<div class="lg-empty">No expenses logged this month yet.</div>';
+
+    const recent = state.transactions.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.created||'').localeCompare(a.created||'')).slice(0,6);
+    document.getElementById('lg-recent').innerHTML = recent.length
+      ? recent.map(t => `<div class="lg-row"><span class="desc">${escapeHtml(t.description)}</span><span class="cat">${escapeHtml(t.category)}</span><span class="amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</span></div>`).join('')
+      : '<div class="lg-empty">Nothing logged yet.</div>';
+  }
+
+  function renderTransactions(){
+    const list = state.transactions.slice().sort((a,b)=> b.date.localeCompare(a.date) || (b.created||'').localeCompare(a.created||''));
+    const div = document.getElementById('lg-tx-list');
+    if(!list.length){ div.innerHTML = '<div class="lg-empty">No entries yet.</div>'; return; }
+    div.innerHTML = list.map(t => `
+      <div class="lg-row">
+        <span class="desc">${escapeHtml(t.description)} <span style="color:var(--ink-soft);font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;font-size:10.5px;">${t.date}</span></span>
+        <span class="cat">${escapeHtml(t.category)}</span>
+        <span class="amt ${t.type}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</span>
+        <button class="del" data-id="${t.id}" aria-label="Delete entry">&times;</button>
+      </div>`).join('');
+    div.querySelectorAll('.del').forEach(btn => btn.addEventListener('click', () => {
+      state.transactions = state.transactions.filter(t => t.id !== btn.dataset.id);
+      save(); renderAll();
+    }));
+  }
+
+  function renderBudgets(){
+    const mKey = new Date().toISOString().slice(0,7);
+    const spentByCat = {};
+    state.transactions.filter(t=>t.type==='expense' && monthKey(t.date)===mKey).forEach(t=>{ spentByCat[t.category] = (spentByCat[t.category]||0) + t.amount; });
+
+    function budgetItemHTML(cat, limit, sub){
+      const spent = spentByCat[cat] || 0;
+      const pct = limit > 0 ? Math.min(100, (spent/limit)*100) : 0;
+      let barClass = ''; if(spent > limit) barClass = 'over'; else if(pct > 80) barClass = 'warn';
+      return `<div class="lg-budget-item ${sub?'sub':''}"><div class="lg-budget-top"><span class="name with-dot"><span class="lg-cat-dot" style="background:${getCategoryColor(cat)}"></span>${escapeHtml(cat)}</span><span class="nums">${fmt(spent)} / ${fmt(limit)}</span></div><div class="lg-bar-track"><div class="lg-bar-fill ${barClass}" style="width:${pct}%"></div></div></div>`;
+    }
+
+    const budgetedByParent = {}; const standaloneBudgets = [];
+    Object.entries(state.budgets).forEach(([cat, limit]) => {
+      const p = getParent(cat);
+      if (p) { (budgetedByParent[p] = budgetedByParent[p] || []).push([cat, limit]); } else { standaloneBudgets.push([cat, limit]); }
+    });
+
+    let html = '';
+    PARENT_ORDER.forEach(p => {
+      const entries = budgetedByParent[p];
+      if (!entries || !entries.length) return;
+      const totalLimit = entries.reduce((s,e)=>s+e[1],0);
+      const totalSpent = entries.reduce((s,e)=>s+(spentByCat[e[0]]||0),0);
+      html += `<div class="lg-parent-block"><div class="lg-parent-head"><span class="name with-dot"><span class="lg-cat-dot" style="background:${PARENT_COLORS[p]}"></span>${escapeHtml(p)}</span><span class="nums">${fmt(totalSpent)} / ${fmt(totalLimit)}</span></div>`;
+      entries.forEach(([cat, limit]) => { html += budgetItemHTML(cat, limit, true); });
+      html += `</div>`;
+    });
+    if (standaloneBudgets.length) {
+      html += standaloneBudgets.map(([cat, limit]) => budgetItemHTML(cat, limit, false)).join('');
+    }
+    document.getElementById('lg-budget-list').innerHTML = html || '<div class="lg-empty">No budgets set yet.</div>';
+
+    const catManage = document.getElementById('lg-cat-manage');
+    const groupOptions = ['needs','wants','savings'];
+    function catRowHTML(cat, sub){
+      const g = state.categoryGroups[cat] || 'wants';
+      const opts = groupOptions.map(o => `<option value="${o}" ${o===g?'selected':''}>${o.charAt(0).toUpperCase()+o.slice(1)}</option>`).join('');
+      return `<div class="lg-row ${sub?'sub':''}"><span class="desc with-dot"><span class="lg-cat-dot" style="background:${getCategoryColor(cat)}"></span>${escapeHtml(cat)}</span><select class="lg-cat-group-select" data-cat="${escapeHtml(cat)}">${opts}</select><button class="lg-remove-cat" data-cat="${escapeHtml(cat)}" aria-label="Remove category">&times;</button></div>`;
+    }
+    const catsByParent = {}; const standaloneCats = [];
+    state.categories.forEach(cat => { const p = getParent(cat); if(p){ (catsByParent[p]=catsByParent[p]||[]).push(cat); } else { standaloneCats.push(cat); } });
+    let catHtml = '';
+    PARENT_ORDER.forEach(p => {
+      const cats = catsByParent[p];
+      if(!cats || !cats.length) return;
+      catHtml += `<h3>${escapeHtml(p)}</h3>`;
+      cats.forEach(cat => { catHtml += catRowHTML(cat, true); });
+    });
+    if(standaloneCats.length){
+      catHtml += `<h3>Other</h3>`;
+      standaloneCats.forEach(cat => { catHtml += catRowHTML(cat, false); });
+    }
+    catManage.innerHTML = catHtml;
+
+    catManage.querySelectorAll('.lg-cat-group-select').forEach(sel => sel.addEventListener('change', () => {
+      state.categoryGroups[sel.dataset.cat] = sel.value;
+      save(); renderOverview();
+    }));
+    catManage.querySelectorAll('.lg-remove-cat').forEach(btn => btn.addEventListener('click', () => {
+      const cat = btn.dataset.cat;
+      state.categories = state.categories.filter(c => c !== cat);
+      delete state.budgets[cat];
+      delete state.categoryGroups[cat];
+      delete state.categoryParents[cat];
+      save(); populateCategorySelects(); renderAll();
+    }));
+  }
+
+  function renderSinkingFunds(){
+    const sfDiv = document.getElementById('lg-sf-list');
+    sfDiv.innerHTML = state.sinkingFunds.length ? state.sinkingFunds.map(f => {
+      const pct = f.target > 0 ? Math.min(100, (f.saved/f.target)*100) : 0;
+      return `
+        <div class="lg-sink-item">
+          <div class="lg-sink-top"><span class="name">${escapeHtml(f.name)}</span><span class="nums">${fmt(f.saved)} / ${fmt(f.target)}</span></div>
+          <div class="lg-bar-track"><div class="lg-bar-fill" style="width:${pct}%"></div></div>
+          <div class="lg-sink-actions">
+            <input type="number" placeholder="Add amount" step="0.01" data-sf-input="${f.id}">
+            <button class="lg-mini-btn" data-sf-add="${f.id}">Add</button>
+            <button class="lg-mini-btn" data-sf-del="${f.id}">Remove</button>
+          </div>
+        </div>`;
+    }).join('') : '<div class="lg-empty">No sinking funds yet.</div>';
+
+    sfDiv.querySelectorAll('[data-sf-add]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.sfAdd;
+      const input = sfDiv.querySelector(`[data-sf-input="${id}"]`);
+      const amt = parseFloat(input.value);
+      if(isNaN(amt)) return;
+      const fund = state.sinkingFunds.find(f => f.id === id);
+      if(fund){ fund.saved = Math.max(0, fund.saved + amt); input.value = ''; save(); renderSinkingFunds(); }
+    }));
+    sfDiv.querySelectorAll('[data-sf-del]').forEach(btn => btn.addEventListener('click', () => {
+      state.sinkingFunds = state.sinkingFunds.filter(f => f.id !== btn.dataset.sfDel);
+      save(); renderSinkingFunds();
+    }));
+
+    const ooDiv = document.getElementById('lg-oo-list');
+    ooDiv.innerHTML = state.oneOffs.length ? state.oneOffs.map(o => {
+      const pct = o.budget > 0 ? Math.min(100, (o.spent/o.budget)*100) : 0;
+      let barClass = ''; if(o.spent > o.budget) barClass = 'over'; else if(pct > 80) barClass = 'warn';
+      return `
+        <div class="lg-sink-item">
+          <div class="lg-sink-top"><span class="name">${escapeHtml(o.name)}</span><span class="nums">${fmt(o.spent)} / ${fmt(o.budget)}</span></div>
+          <div class="lg-bar-track"><div class="lg-bar-fill ${barClass}" style="width:${pct}%"></div></div>
+          <div class="lg-sink-actions">
+            <input type="number" placeholder="Add spend" step="0.01" data-oo-input="${o.id}">
+            <button class="lg-mini-btn" data-oo-add="${o.id}">Add</button>
+            <button class="lg-mini-btn" data-oo-del="${o.id}">Remove</button>
+          </div>
+        </div>`;
+    }).join('') : '<div class="lg-empty">No non-recurrent expenses yet.</div>';
+
+    ooDiv.querySelectorAll('[data-oo-add]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.ooAdd;
+      const input = ooDiv.querySelector(`[data-oo-input="${id}"]`);
+      const amt = parseFloat(input.value);
+      if(isNaN(amt)) return;
+      const item = state.oneOffs.find(o => o.id === id);
+      if(item){ item.spent = Math.max(0, item.spent + amt); input.value = ''; save(); renderSinkingFunds(); }
+    }));
+    ooDiv.querySelectorAll('[data-oo-del]').forEach(btn => btn.addEventListener('click', () => {
+      state.oneOffs = state.oneOffs.filter(o => o.id !== btn.dataset.ooDel);
+      save(); renderSinkingFunds();
+    }));
+  }
+
+  function renderBills(){
+    const div = document.getElementById('lg-bill-list');
+    if(!state.bills.length){ div.innerHTML = '<div class="lg-empty">No recurring bills yet.</div>'; return; }
+    const mKey = new Date().toISOString().slice(0,7);
+    const sorted = state.bills.slice().sort((a,b)=> (a.dueDay||1) - (b.dueDay||1));
+    div.innerHTML = sorted.map(b => {
+      const paid = (b.paidMonths||[]).includes(mKey);
+      return `
+        <div class="lg-bill-row">
+          <div class="lg-bill-left"><span class="name">${escapeHtml(b.name)}</span><span class="meta">${b.frequency} &middot; due day ${b.dueDay}</span></div>
+          <div class="lg-bill-right">
+            <span class="lg-bill-amt">${fmt(b.amount)}</span>
+            <button class="lg-paid-check ${paid?'paid':''}" data-id="${b.id}">${paid?'Paid':'Mark paid'}</button>
+            <button class="del" data-billdel="${b.id}" aria-label="Delete bill">&times;</button>
+          </div>
+        </div>`;
+    }).join('');
+    div.querySelectorAll('.lg-paid-check').forEach(btn => btn.addEventListener('click', () => {
+      const bill = state.bills.find(b => b.id === btn.dataset.id);
+      if(!bill) return;
+      bill.paidMonths = bill.paidMonths || [];
+      const idx = bill.paidMonths.indexOf(mKey);
+      if(idx >= 0) bill.paidMonths.splice(idx,1); else bill.paidMonths.push(mKey);
+      save(); renderBills();
+    }));
+    div.querySelectorAll('[data-billdel]').forEach(btn => btn.addEventListener('click', () => {
+      state.bills = state.bills.filter(b => b.id !== btn.dataset.billdel);
+      save(); renderBills(); renderCalendarDots();
+    }));
+  }
+
+  function renderDebts(){
+    const totalBalance = state.debts.reduce((s,d)=>s+d.balance,0);
+    const totalMin = state.debts.reduce((s,d)=>s+d.minPayment,0);
+    const avgRate = state.debts.length ? (state.debts.reduce((s,d)=>s+d.rate,0) / state.debts.length) : 0;
+
+    const assets = totalAssets();
+    const netWorth = assets - totalBalance;
+    document.getElementById('lg-networth-summary').innerHTML = `
+      <div class="lg-summary-item"><div class="label">Assets</div><div class="value">${fmt(assets)}</div></div>
+      <div class="lg-summary-item"><div class="label">Liabilities</div><div class="value">${fmt(totalBalance)}</div></div>
+      <div class="lg-summary-item"><div class="label">Net Worth</div><div class="value" style="color:${netWorth >= 0 ? 'var(--ok)' : 'var(--danger)'}">${fmt(netWorth)}</div></div>
+    `;
+
+    document.getElementById('lg-debt-summary').innerHTML = `
+      <div class="lg-summary-item"><div class="label">Total Owed</div><div class="value">${fmt(totalBalance)}</div></div>
+      <div class="lg-summary-item"><div class="label">Min. Payments</div><div class="value">${fmt(totalMin)}</div></div>
+      <div class="lg-summary-item"><div class="label">Avg. Rate</div><div class="value">${avgRate.toFixed(2)}%</div></div>
+    `;
+    const div = document.getElementById('lg-debt-list');
+    if(!state.debts.length){ div.innerHTML = '<div class="lg-empty">No debts added yet.</div>'; return; }
+    div.innerHTML = state.debts.slice().sort((a,b)=>b.balance-a.balance).map(d => `
+      <div class="lg-sink-item">
+        <div class="lg-sink-top"><span class="name">${escapeHtml(d.name)}</span><span class="nums">${fmt(d.balance)} owed &middot; ${d.rate}% &middot; min ${fmt(d.minPayment)}</span></div>
+        <div class="lg-sink-actions">
+          <input type="number" placeholder="Log payment" step="0.01" data-debt-input="${d.id}">
+          <button class="lg-mini-btn" data-debt-pay="${d.id}">Log payment</button>
+          <button class="lg-mini-btn" data-debt-del="${d.id}">Remove</button>
+        </div>
+      </div>`).join('');
+    div.querySelectorAll('[data-debt-pay]').forEach(btn => btn.addEventListener('click', () => {
+      const id = btn.dataset.debtPay;
+      const input = div.querySelector(`[data-debt-input="${id}"]`);
+      const amt = parseFloat(input.value);
+      if(isNaN(amt)) return;
+      const debt = state.debts.find(d => d.id === id);
+      if(debt){ debt.balance = Math.max(0, debt.balance - amt); input.value = ''; save(); renderDebts(); }
+    }));
+    div.querySelectorAll('[data-debt-del]').forEach(btn => btn.addEventListener('click', () => {
+      state.debts = state.debts.filter(d => d.id !== btn.dataset.debtDel);
+      save(); renderDebts();
+    }));
+  }
+
+  function renderAll(){ renderStamp(); renderCalendar(); renderAccounts(); renderOverview(); renderTransactions(); renderBudgets(); renderSinkingFunds(); renderBills(); renderDebts(); }
+
+  function initTabs(){
+    document.querySelectorAll('.lg-bottom-tab').forEach(tab => tab.addEventListener('click', () => {
+      document.querySelectorAll('.lg-bottom-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.lg-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }));
+  }
+
+  function initTypeToggle(){
+    document.querySelectorAll('#lg-type-toggle button').forEach(btn => btn.addEventListener('click', () => {
+      currentTxType = btn.dataset.type;
+      document.querySelectorAll('#lg-type-toggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }));
+  }
+
+  function initAddTx(){
+    document.getElementById('lg-add-tx').addEventListener('click', () => {
+      const desc = document.getElementById('lg-tx-desc').value.trim();
+      const amount = parseFloat(document.getElementById('lg-tx-amount').value);
+      const category = document.getElementById('lg-tx-category').value;
+      const date = document.getElementById('lg-tx-date').value || todayISO();
+      if(!desc || isNaN(amount) || amount <= 0) return;
+      state.transactions.push({ id: uid(), description: desc, amount, category, type: currentTxType, date, created: new Date().toISOString() });
+      document.getElementById('lg-tx-desc').value = '';
+      document.getElementById('lg-tx-amount').value = '';
+      save(); renderAll();
+    });
+  }
+
+  function initAddBudget(){
+    document.getElementById('lg-add-budget').addEventListener('click', () => {
+      const cat = document.getElementById('lg-budget-cat').value;
+      const amount = parseFloat(document.getElementById('lg-budget-amount').value);
+      if(!cat || isNaN(amount) || amount <= 0) return;
+      state.budgets[cat] = amount;
+      document.getElementById('lg-budget-amount').value = '';
+      save(); renderBudgets();
+    });
+  }
+
+  function initAddCategory(){
+    document.getElementById('lg-add-cat').addEventListener('click', () => {
+      const input = document.getElementById('lg-new-cat');
+      const name = input.value.trim();
+      const parent = document.getElementById('lg-new-cat-parent').value;
+      const group = document.getElementById('lg-new-cat-group').value;
+      if(!name || state.categories.includes(name)) return;
+      state.categories.push(name);
+      state.categoryGroups[name] = group;
+      if(parent) state.categoryParents[name] = parent; else delete state.categoryParents[name];
+      input.value = '';
+      save(); populateCategorySelects(); renderBudgets();
+    });
+  }
+
+  function initAddSinkingFund(){
+    document.getElementById('lg-add-sf').addEventListener('click', () => {
+      const name = document.getElementById('lg-sf-name').value.trim();
+      const target = parseFloat(document.getElementById('lg-sf-target').value);
+      const saved = parseFloat(document.getElementById('lg-sf-saved').value) || 0;
+      if(!name || isNaN(target) || target <= 0) return;
+      state.sinkingFunds.push({ id: uid(), name, target, saved });
+      document.getElementById('lg-sf-name').value = '';
+      document.getElementById('lg-sf-target').value = '';
+      document.getElementById('lg-sf-saved').value = '';
+      save(); renderSinkingFunds();
+    });
+  }
+
+  function initAddOneOff(){
+    document.getElementById('lg-add-oo').addEventListener('click', () => {
+      const name = document.getElementById('lg-oo-name').value.trim();
+      const budget = parseFloat(document.getElementById('lg-oo-budget').value);
+      const spent = parseFloat(document.getElementById('lg-oo-spent').value) || 0;
+      if(!name || isNaN(budget) || budget <= 0) return;
+      state.oneOffs.push({ id: uid(), name, budget, spent });
+      document.getElementById('lg-oo-name').value = '';
+      document.getElementById('lg-oo-budget').value = '';
+      document.getElementById('lg-oo-spent').value = '';
+      save(); renderSinkingFunds();
+    });
+  }
+
+  function initAddBill(){
+    document.getElementById('lg-add-bill').addEventListener('click', () => {
+      const name = document.getElementById('lg-bill-name').value.trim();
+      const amount = parseFloat(document.getElementById('lg-bill-amount').value);
+      const day = parseInt(document.getElementById('lg-bill-day').value, 10);
+      const freq = document.getElementById('lg-bill-freq').value;
+      if(!name || isNaN(amount) || amount <= 0 || isNaN(day)) return;
+      state.bills.push({ id: uid(), name, amount, dueDay: day, frequency: freq, paidMonths: [] });
+      document.getElementById('lg-bill-name').value = '';
+      document.getElementById('lg-bill-amount').value = '';
+      document.getElementById('lg-bill-day').value = '';
+      save(); renderBills(); renderCalendarDots();
+    });
+  }
+
+  function initAddDebt(){
+    document.getElementById('lg-add-debt').addEventListener('click', () => {
+      const name = document.getElementById('lg-debt-name').value.trim();
+      const balance = parseFloat(document.getElementById('lg-debt-balance').value);
+      const rate = parseFloat(document.getElementById('lg-debt-rate').value) || 0;
+      const minPayment = parseFloat(document.getElementById('lg-debt-min').value) || 0;
+      if(!name || isNaN(balance) || balance < 0) return;
+      state.debts.push({ id: uid(), name, balance, rate, minPayment });
+      document.getElementById('lg-debt-name').value = '';
+      document.getElementById('lg-debt-balance').value = '';
+      document.getElementById('lg-debt-rate').value = '';
+      document.getElementById('lg-debt-min').value = '';
+      save(); renderDebts();
+    });
+  }
+
+  function init(){
+    document.getElementById('lg-today').textContent = new Date().toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    document.getElementById('lg-tx-date').value = todayISO();
+    document.getElementById('lg-export-btn').addEventListener('click', exportMonthToExcel);
+
+    loadLocal();
+    populateCategorySelects();
+    initTabs(); initTypeToggle(); initAddTx(); initAddBudget(); initAddCategory();
+    initAddSinkingFund(); initAddOneOff(); initAddBill(); initAddDebt(); initAddAccount();
+    renderAll();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
