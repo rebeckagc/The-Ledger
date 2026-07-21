@@ -15,10 +15,9 @@
     --text-secondary: #8e8e93;
     --accent-cream: #f2efe9;
     --accent-dark: #000000;
-    --dot-color: #e5c158;
     --progress-bg: #2c2c2e;
-    --progress-fill: #f2efe9;
     --danger-red: #ff453a;
+    --success-green: #34c759;
   }
 
   * {
@@ -31,7 +30,7 @@
   body {
     background-color: var(--bg-color);
     color: var(--text-primary);
-    padding: 20px 16px 100px; /* Extra bottom padding so content doesn't get covered by fixed nav bar */
+    padding: 20px 16px 100px;
     max-width: 600px;
     margin: 0 auto;
     font-variant-numeric: normal;
@@ -71,7 +70,7 @@
     color: var(--accent-dark);
   }
 
-  /* Layout & Panels */
+  /* Panels & Cards */
   .lg-panel {
     display: none;
     flex-direction: column;
@@ -134,7 +133,7 @@
     margin-top: 2px;
   }
 
-  .income-text { color: #34c759; }
+  .income-text { color: var(--success-green); }
   .expense-text { color: var(--danger-red); }
 
   /* Calendar */
@@ -169,17 +168,30 @@
     background: #101012;
     font-size: 13px;
     position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
   }
 
-  .cal-cell.empty { background: transparent; }
+  .cal-cell:hover:not(.empty) {
+    background: #1f1f24;
+  }
+
+  .cal-cell.empty {
+    background: transparent;
+    cursor: default;
+  }
+
+  .cal-dots-container {
+    display: flex;
+    gap: 2px;
+    position: absolute;
+    bottom: 3px;
+  }
 
   .cal-dot {
     width: 4px;
     height: 4px;
-    background-color: var(--dot-color);
     border-radius: 50%;
-    position: absolute;
-    bottom: 4px;
   }
 
   /* Pie Chart Container */
@@ -202,6 +214,15 @@
     gap: 6px;
   }
 
+  .field-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .field-row .field-group {
+    flex: 1;
+  }
+
   label {
     font-size: 12px;
     font-weight: 500;
@@ -221,6 +242,12 @@
     outline: none;
     font-variant-numeric: normal;
     font-feature-settings: 'zero' 0;
+  }
+
+  input[type="color"] {
+    padding: 4px;
+    height: 46px;
+    cursor: pointer;
   }
 
   input:focus, select:focus {
@@ -247,15 +274,22 @@
     color: var(--text-primary);
   }
 
-  .lg-btn.danger-sm {
-    background: transparent;
-    color: var(--danger-red);
-    border: 1px solid var(--danger-red);
-    padding: 4px 8px;
+  .lg-btn.danger {
+    background: var(--danger-red);
+    color: #ffffff;
+  }
+
+  .lg-btn.edit-sm {
+    background: #2c2c2e;
+    color: var(--text-primary);
+    padding: 4px 10px;
     font-size: 11px;
     border-radius: 6px;
     cursor: pointer;
+    border: none;
   }
+
+  .lg-btn:hover { opacity: 0.9; }
 
   /* Segmented Pill Tabs */
   .pill-tabs {
@@ -286,7 +320,7 @@
     color: var(--accent-dark);
   }
 
-  /* Dynamic Budget Category Management */
+  /* Dynamic Budget Categories */
   .budget-item {
     background: #101012;
     padding: 14px;
@@ -304,6 +338,18 @@
     margin-bottom: 8px;
   }
 
+  .cat-dot-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .color-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
   .progress-bar-bg {
     width: 100%;
     height: 8px;
@@ -314,7 +360,6 @@
 
   .progress-bar-fill {
     height: 100%;
-    background: var(--progress-fill);
     border-radius: 999px;
     transition: width 0.3s ease;
   }
@@ -340,6 +385,9 @@
   .item-title {
     font-weight: 600;
     font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .item-sub {
@@ -352,13 +400,57 @@
     font-weight: 600;
     font-size: 15px;
   }
+
+  /* Modals */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    padding: 20px;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+  }
+
+  .modal-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 20px;
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
 
   <!-- OVERVIEW PANEL -->
   <div class="lg-panel active" id="panel-overview">
-    <!-- Stat Box -->
     <div class="lg-card">
       <div class="stat-box">
         <div class="stat-label">Total Budget</div>
@@ -376,14 +468,12 @@
       </div>
     </div>
 
-    <!-- Read-only Synced Calendar -->
     <div class="lg-card">
       <h2>Calendar</h2>
       <div class="cal-header" id="cal-month-year">July 2026</div>
       <div class="cal-grid" id="lg-calendar-grid"></div>
     </div>
 
-    <!-- Pie Chart -->
     <div class="lg-card">
       <h2>Spending Breakdown</h2>
       <div class="chart-container">
@@ -394,7 +484,6 @@
 
   <!-- BUDGET PANEL -->
   <div class="lg-panel" id="panel-budget">
-    <!-- Log Entry Card -->
     <div class="lg-card">
       <h2>Add Income / Expense</h2>
       <div class="lg-form">
@@ -407,9 +496,7 @@
         </div>
         <div class="field-group">
           <label>Category</label>
-          <select id="lg-budget-cat-select">
-            <!-- Dynamically populated from category object -->
-          </select>
+          <select id="lg-budget-cat-select"></select>
         </div>
         <div class="field-group">
           <label>Amount</label>
@@ -419,51 +506,51 @@
       </div>
     </div>
 
-    <!-- Manage & View Customizable Categories -->
     <div class="lg-card">
       <h2>Categories & Progress</h2>
-      
-      <!-- Create / Edit Category Form -->
       <div class="lg-form" style="margin-bottom: 20px;">
         <div class="field-group">
-          <label>New Category Name</label>
+          <label>Category Name</label>
           <input type="text" id="lg-new-cat-name" placeholder="e.g. Subscriptions">
         </div>
-        <div class="field-group">
-          <label>Target Budget Limit</label>
-          <input type="number" id="lg-new-cat-limit" placeholder="500.00">
+        <div class="field-row">
+          <div class="field-group">
+            <label>Target Budget</label>
+            <input type="number" id="lg-new-cat-limit" placeholder="500.00">
+          </div>
+          <div class="field-group" style="max-width: 70px;">
+            <label>Color</label>
+            <input type="color" id="lg-new-cat-color" value="#e5c158">
+          </div>
         </div>
-        <button class="lg-btn secondary" onclick="addOrUpdateCategory()">Add / Update Category</button>
+        <button class="lg-btn secondary" onclick="addCategory()">Add Category</button>
       </div>
 
-      <div id="budget-progress-container">
-        <!-- Rendered Categories & Progress Bars -->
-      </div>
+      <div id="budget-progress-container"></div>
     </div>
   </div>
 
   <!-- BILLS PANEL -->
   <div class="lg-panel" id="panel-bills">
     <div class="lg-card">
-      <!-- Pill Tabs -->
       <div class="pill-tabs">
         <button class="pill-tab active" id="tab-btn-upcoming" onclick="switchBillTab('upcoming')">Upcoming</button>
         <button class="pill-tab" id="tab-btn-new" onclick="switchBillTab('new')">New Bill</button>
       </div>
 
-      <!-- UPCOMING EXPENSES VIEW -->
       <div id="view-bills-upcoming">
-        <div class="list-wrapper" id="lg-bills-list">
-          <!-- Upcoming expenses list injected here -->
-        </div>
+        <div class="list-wrapper" id="lg-bills-list"></div>
       </div>
 
-      <!-- NEW BILL FORM VIEW -->
       <div id="view-bills-new" style="display: none;">
         <div class="lg-form">
           <div class="field-group">
             <label>Bill Name</label>
             <input type="text" id="lg-bill-name" placeholder="e.g. Internet / Rent">
+          </div>
+          <div class="field-group">
+            <label>Category</label>
+            <select id="lg-bill-cat-select"></select>
           </div>
           <div class="field-group">
             <label>Amount</label>
@@ -500,6 +587,10 @@
           <label>Account Number</label>
           <input type="text" id="lg-acc-number" placeholder="e.g. 000000000000">
         </div>
+        <div class="field-group">
+          <label>Balance</label>
+          <input type="number" id="lg-acc-balance" placeholder="0.00">
+        </div>
         <button class="lg-btn secondary" onclick="addAccount()">Add Account</button>
       </div>
 
@@ -507,7 +598,7 @@
     </div>
   </div>
 
-  <!-- DEBT PANEL -->
+  <!-- DEBT & ASSETS PANEL -->
   <div class="lg-panel" id="panel-debt">
     <div class="lg-card">
       <h2>Debt Tracker</h2>
@@ -525,9 +616,64 @@
 
       <div class="list-wrapper" id="lg-debt-list"></div>
     </div>
+
+    <div class="lg-card">
+      <h2>Assets Tracker</h2>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Asset Name</label>
+          <input type="text" id="lg-asset-name" placeholder="e.g. Emergency Fund / Toyota">
+        </div>
+        <div class="field-group">
+          <label>Asset Type</label>
+          <select id="lg-asset-type">
+            <option value="Savings">Savings</option>
+            <option value="Investments">Investments</option>
+            <option value="House/Car">House/Car</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Estimated Value</label>
+          <input type="number" id="lg-asset-amount" placeholder="0.00">
+        </div>
+        <button class="lg-btn primary" onclick="addAsset()">Add Asset</button>
+      </div>
+
+      <div class="list-wrapper" id="lg-asset-list"></div>
+    </div>
   </div>
 
-  <!-- Fixed Bottom Navigation Bar -->
+  <!-- CALENDAR POPUP MODAL -->
+  <div class="modal-overlay" id="cal-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-date-title" style="margin:0;">Details</h2>
+        <button class="close-btn" onclick="closeModal('cal-modal')">&times;</button>
+      </div>
+      <div id="modal-date-content" class="list-wrapper"></div>
+    </div>
+  </div>
+
+  <!-- EDIT CATEGORY MODAL -->
+  <div class="modal-overlay" id="edit-cat-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="edit-cat-title" style="margin:0;">Edit Category</h2>
+        <button class="close-btn" onclick="closeModal('edit-cat-modal')">&times;</button>
+      </div>
+      <div class="lg-form">
+        <input type="hidden" id="edit-cat-original-name">
+        <div class="field-group">
+          <label>Target Budget Limit</label>
+          <input type="number" id="edit-cat-limit" placeholder="0.00">
+        </div>
+        <button class="lg-btn primary" onclick="saveCategoryEdit()">Save Target</button>
+        <button class="lg-btn danger" onclick="deleteCategoryFromModal()">Delete Category</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation Bar -->
   <div class="bottom-nav">
     <button class="nav-btn active" onclick="switchMainTab('overview', this)">Overview</button>
     <button class="nav-btn" onclick="switchMainTab('budget', this)">Budget</button>
@@ -537,12 +683,19 @@
   </div>
 
 <script>
-  // App State Data
+  // App Data Store
   let bills = [];
   let accounts = [];
   let debts = [];
+  let assets = [];
   let budgetEntries = [];
-  let categories = { Housing: 1500, Food: 600, Utilities: 400, Entertainment: 300, Personal: 300 };
+  let categories = {
+    Housing: { limit: 1500, color: '#f2efe9' },
+    Food: { limit: 600, color: '#e5c158' },
+    Utilities: { limit: 400, color: '#ff453a' },
+    Entertainment: { limit: 300, color: '#34c759' },
+    Personal: { limit: 300, color: '#8e8e93' }
+  };
   let pieChart = null;
 
   // Bottom Navigation Controller
@@ -560,10 +713,12 @@
     } else if (tabId === 'budget') {
       updateCategorySelectOptions();
       renderBudgetProgress();
+    } else if (tabId === 'bills') {
+      updateCategorySelectOptions();
     }
   }
 
-  // Bill Pill Tabs Switcher (Upcoming vs New Bill)
+  // Bill Pill Tabs Switcher
   function switchBillTab(tabType) {
     document.getElementById('tab-btn-upcoming').classList.toggle('active', tabType === 'upcoming');
     document.getElementById('tab-btn-new').classList.toggle('active', tabType === 'new');
@@ -576,16 +731,22 @@
     }
   }
 
+  // Modals
+  function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+  }
+
   // Add Bill
   function addBill() {
     const name = document.getElementById('lg-bill-name').value.trim();
+    const cat = document.getElementById('lg-bill-cat-select').value;
     const amount = parseFloat(document.getElementById('lg-bill-amount').value) || 0;
     const date = document.getElementById('lg-bill-date').value;
     const freq = document.getElementById('lg-bill-freq').value;
 
     if (!name || !date || !amount) return;
 
-    bills.push({ id: Date.now(), name, amount, date, freq });
+    bills.push({ id: Date.now(), name, cat, amount, date, freq });
 
     document.getElementById('lg-bill-name').value = '';
     document.getElementById('lg-bill-amount').value = '';
@@ -595,24 +756,27 @@
     updateOverviewStats();
   }
 
-  // Render Upcoming Bills List
   function renderBillsList() {
     const list = document.getElementById('lg-bills-list');
     list.innerHTML = '';
 
     if (bills.length === 0) {
-      list.innerHTML = '<div style="text-align:center; color: var(--text-secondary); font-size: 14px; padding: 20px;">No upcoming expenses recorded</div>';
+      list.innerHTML = '<div style="text-align:center; color: var(--text-secondary); font-size: 14px; padding: 20px;">No upcoming expenses</div>';
       return;
     }
 
     bills.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     bills.forEach(b => {
+      const catColor = categories[b.cat]?.color || '#8e8e93';
       const item = document.createElement('div');
       item.className = 'list-item';
       item.innerHTML = `
         <div>
-          <div class="item-title">${b.name}</div>
+          <div class="item-title">
+            <span class="color-indicator" style="background-color: ${catColor};"></span>
+            ${b.name}
+          </div>
           <div class="item-sub">Due: ${b.date} • Recurs: ${b.freq.charAt(0).toUpperCase() + b.freq.slice(1)}</div>
         </div>
         <div class="item-val">$${b.amount.toFixed(2)}</div>
@@ -621,14 +785,15 @@
     });
   }
 
-  // Category & Budget Progress Management
-  function addOrUpdateCategory() {
+  // Categories & Budget Progress Management
+  function addCategory() {
     const name = document.getElementById('lg-new-cat-name').value.trim();
     const limit = parseFloat(document.getElementById('lg-new-cat-limit').value) || 0;
+    const color = document.getElementById('lg-new-cat-color').value;
 
     if (!name || limit <= 0) return;
 
-    categories[name] = limit;
+    categories[name] = { limit, color };
 
     document.getElementById('lg-new-cat-name').value = '';
     document.getElementById('lg-new-cat-limit').value = '';
@@ -637,20 +802,49 @@
     renderBudgetProgress();
   }
 
-  function deleteCategory(catName) {
+  function openEditCategoryModal(catName) {
+    document.getElementById('edit-cat-title').innerText = `Edit ${catName}`;
+    document.getElementById('edit-cat-original-name').value = catName;
+    document.getElementById('edit-cat-limit').value = categories[catName].limit;
+    document.getElementById('edit-cat-modal').classList.add('active');
+  }
+
+  function saveCategoryEdit() {
+    const catName = document.getElementById('edit-cat-original-name').value;
+    const limit = parseFloat(document.getElementById('edit-cat-limit').value) || 0;
+
+    if (limit > 0 && categories[catName]) {
+      categories[catName].limit = limit;
+      renderBudgetProgress();
+    }
+    closeModal('edit-cat-modal');
+  }
+
+  function deleteCategoryFromModal() {
+    const catName = document.getElementById('edit-cat-original-name').value;
     delete categories[catName];
     updateCategorySelectOptions();
     renderBudgetProgress();
+    closeModal('edit-cat-modal');
   }
 
   function updateCategorySelectOptions() {
-    const select = document.getElementById('lg-budget-cat-select');
-    select.innerHTML = '';
+    const bSelect = document.getElementById('lg-budget-cat-select');
+    const billSelect = document.getElementById('lg-bill-cat-select');
+    
+    bSelect.innerHTML = '';
+    billSelect.innerHTML = '';
+
     Object.keys(categories).forEach(cat => {
-      const opt = document.createElement('option');
-      opt.value = cat;
-      opt.innerText = cat;
-      select.appendChild(opt);
+      const opt1 = document.createElement('option');
+      opt1.value = cat;
+      opt1.innerText = cat;
+      bSelect.appendChild(opt1);
+
+      const opt2 = document.createElement('option');
+      opt2.value = cat;
+      opt2.innerText = cat;
+      billSelect.appendChild(opt2);
     });
   }
 
@@ -659,10 +853,12 @@
     container.innerHTML = '';
 
     Object.keys(categories).forEach(cat => {
-      const limit = categories[cat];
+      const catData = categories[cat];
+      const limit = catData.limit;
       const spent = budgetEntries
         .filter(e => e.type === 'expense' && e.cat === cat)
-        .reduce((sum, e) => sum + e.amount, 0);
+        .reduce((sum, e) => sum + e.amount, 0) + 
+        bills.filter(b => b.cat === cat).reduce((sum, b) => sum + b.amount, 0);
 
       const percentage = Math.min((spent / limit) * 100, 100);
 
@@ -670,14 +866,17 @@
       div.className = 'budget-item';
       div.innerHTML = `
         <div class="budget-header">
-          <span>${cat}</span>
+          <div class="cat-dot-label">
+            <span class="color-indicator" style="background-color: ${catData.color}"></span>
+            <span>${cat}</span>
+          </div>
           <div>
             <span style="margin-right: 8px;">$${spent.toFixed(2)} / $${limit.toFixed(2)}</span>
-            <button class="lg-btn danger-sm" onclick="deleteCategory('${cat}')">Delete</button>
+            <button class="lg-btn edit-sm" onclick="openEditCategoryModal('${cat}')">Edit</button>
           </div>
         </div>
         <div class="progress-bar-bg">
-          <div class="progress-bar-fill" style="width: ${percentage}%;"></div>
+          <div class="progress-bar-fill" style="width: ${percentage}%; background-color: ${catData.color}"></div>
         </div>
       `;
       container.appendChild(div);
@@ -703,13 +902,15 @@
   function addAccount() {
     const bank = document.getElementById('lg-acc-bank').value.trim();
     const number = document.getElementById('lg-acc-number').value.trim();
+    const balance = parseFloat(document.getElementById('lg-acc-balance').value) || 0;
 
     if (!bank || !number) return;
 
-    accounts.push({ id: Date.now(), bank, number });
+    accounts.push({ id: Date.now(), bank, number, balance });
 
     document.getElementById('lg-acc-bank').value = '';
     document.getElementById('lg-acc-number').value = '';
+    document.getElementById('lg-acc-balance').value = '';
 
     renderAccounts();
   }
@@ -726,12 +927,13 @@
           <div class="item-title">${a.bank}</div>
           <div class="item-sub">Acc: ${a.number}</div>
         </div>
+        <div class="item-val">$${a.balance.toFixed(2)}</div>
       `;
       list.appendChild(item);
     });
   }
 
-  // Debt Management
+  // Debt & Asset Management
   function addDebt() {
     const name = document.getElementById('lg-debt-name').value.trim();
     const amount = parseFloat(document.getElementById('lg-debt-amount').value) || 0;
@@ -761,7 +963,40 @@
     });
   }
 
-  // Overview Stats Update
+  function addAsset() {
+    const name = document.getElementById('lg-asset-name').value.trim();
+    const type = document.getElementById('lg-asset-type').value;
+    const amount = parseFloat(document.getElementById('lg-asset-amount').value) || 0;
+
+    if (!name || !amount) return;
+
+    assets.push({ id: Date.now(), name, type, amount });
+
+    document.getElementById('lg-asset-name').value = '';
+    document.getElementById('lg-asset-amount').value = '';
+
+    renderAssets();
+  }
+
+  function renderAssets() {
+    const list = document.getElementById('lg-asset-list');
+    list.innerHTML = '';
+
+    assets.forEach(a => {
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `
+        <div>
+          <div class="item-title">${a.name}</div>
+          <div class="item-sub">${a.type}</div>
+        </div>
+        <div class="item-val income-text">$${a.amount.toFixed(2)}</div>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  // Stats Update
   function updateOverviewStats() {
     const income = budgetEntries.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
     const expenses = budgetEntries.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) + bills.reduce((sum, b) => sum + b.amount, 0);
@@ -772,28 +1007,37 @@
     document.getElementById('lg-expenditure-val').innerText = `$${expenses.toFixed(2)}`;
   }
 
-  // Pie Chart Rendering
+  // Pie Chart
   function renderPieChart() {
     const ctx = document.getElementById('overviewPieChart').getContext('2d');
     
     const catTotals = {};
+    const catColors = [];
+
     budgetEntries.filter(e => e.type === 'expense').forEach(e => {
       catTotals[e.cat] = (catTotals[e.cat] || 0) + e.amount;
     });
 
-    const labels = Object.keys(catTotals).length ? Object.keys(catTotals) : ['No Expenses'];
-    const data = Object.keys(catTotals).length ? Object.values(catTotals) : [1];
-    const colors = ['#f2efe9', '#e5c158', '#8e8e93', '#ff453a', '#34c759'];
+    bills.forEach(b => {
+      catTotals[b.cat] = (catTotals[b.cat] || 0) + b.amount;
+    });
+
+    const labels = Object.keys(catTotals);
+    const data = Object.values(catTotals);
+
+    labels.forEach(l => {
+      catColors.push(categories[l]?.color || '#8e8e93');
+    });
 
     if (pieChart) pieChart.destroy();
 
     pieChart = new Chart(ctx, {
       type: 'pie',
       data: {
-        labels: labels,
+        labels: labels.length ? labels : ['No Expenses'],
         datasets: [{
-          data: data,
-          backgroundColor: colors,
+          data: data.length ? data : [1],
+          backgroundColor: catColors.length ? catColors : ['#2c2c2e'],
           borderWidth: 0
         }]
       },
@@ -807,7 +1051,7 @@
     });
   }
 
-  // Calendar Rendering
+  // Calendar
   function renderCalendar() {
     const grid = document.getElementById('lg-calendar-grid');
     grid.innerHTML = '';
@@ -842,19 +1086,57 @@
       cell.innerText = day;
 
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const hasBill = bills.some(b => b.date === dateStr);
+      const dayBills = bills.filter(b => b.date === dateStr);
 
-      if (hasBill) {
-        const dot = document.createElement('div');
-        dot.className = 'cal-dot';
-        cell.appendChild(dot);
+      if (dayBills.length > 0) {
+        const dotsContainer = document.createElement('div');
+        dotsContainer.className = 'cal-dots-container';
+
+        dayBills.slice(0, 3).forEach(b => {
+          const dot = document.createElement('div');
+          dot.className = 'cal-dot';
+          dot.style.backgroundColor = categories[b.cat]?.color || '#8e8e93';
+          dotsContainer.appendChild(dot);
+        });
+
+        cell.appendChild(dotsContainer);
       }
+
+      cell.onclick = () => openDayModal(dateStr, dayBills);
 
       grid.appendChild(cell);
     }
   }
 
-  // Initial Setup
+  function openDayModal(dateStr, dayBills) {
+    document.getElementById('modal-date-title').innerText = dateStr;
+    const content = document.getElementById('modal-date-content');
+    content.innerHTML = '';
+
+    if (dayBills.length === 0) {
+      content.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 12px;">No bills due on this date.</div>';
+    } else {
+      dayBills.forEach(b => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = `
+          <div>
+            <div class="item-title">
+              <span class="color-indicator" style="background-color: ${categories[b.cat]?.color || '#8e8e93'};"></span>
+              ${b.name}
+            </div>
+            <div class="item-sub">${b.cat || 'Uncategorized'} • ${b.freq}</div>
+          </div>
+          <div class="item-val">$${b.amount.toFixed(2)}</div>
+        `;
+        content.appendChild(item);
+      });
+    }
+
+    document.getElementById('cal-modal').classList.add('active');
+  }
+
+  // Initial Load Setup
   updateCategorySelectOptions();
   renderCalendar();
   renderPieChart();
