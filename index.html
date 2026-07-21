@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The Ledger</title>
-<!-- Chart.js for Overview Pie Charts -->
+<!-- Chart.js for Overview Pie Chart -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root {
@@ -18,6 +18,7 @@
     --dot-color: #e5c158;
     --progress-bg: #2c2c2e;
     --progress-fill: #f2efe9;
+    --danger-red: #ff453a;
   }
 
   * {
@@ -30,36 +31,38 @@
   body {
     background-color: var(--bg-color);
     color: var(--text-primary);
-    padding: 20px 16px 40px;
+    padding: 20px 16px 100px; /* Extra bottom padding so content doesn't get covered by fixed nav bar */
     max-width: 600px;
     margin: 0 auto;
     font-variant-numeric: normal;
     font-feature-settings: "zero" 0;
   }
 
-  /* Navigation Tabs Header */
-  .nav-tabs {
+  /* Fixed Bottom Navigation Bar */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #141416;
+    border-top: 1px solid var(--card-border);
+    padding: 10px 16px 20px;
     display: flex;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 999px;
-    padding: 4px;
-    margin-bottom: 24px;
-    gap: 4px;
-    overflow-x: auto;
+    justify-content: space-around;
+    z-index: 1000;
+    max-width: 600px;
+    margin: 0 auto;
   }
 
   .nav-btn {
-    flex: 1;
-    padding: 10px 12px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
     font-weight: 600;
-    font-size: 13px;
+    font-size: 12px;
+    padding: 8px 12px;
     border-radius: 999px;
     cursor: pointer;
-    white-space: nowrap;
     transition: all 0.2s ease;
   }
 
@@ -68,7 +71,7 @@
     color: var(--accent-dark);
   }
 
-  /* Panels & Cards */
+  /* Layout & Panels */
   .lg-panel {
     display: none;
     flex-direction: column;
@@ -93,7 +96,7 @@
     color: var(--text-primary);
   }
 
-  /* Overview Financial Summary */
+  /* Financial Overview Stat Display */
   .stat-box {
     text-align: center;
     padding-bottom: 16px;
@@ -132,7 +135,7 @@
   }
 
   .income-text { color: #34c759; }
-  .expense-text { color: #ff453a; }
+  .expense-text { color: var(--danger-red); }
 
   /* Calendar */
   .cal-header {
@@ -179,39 +182,11 @@
     bottom: 4px;
   }
 
-  /* Pie Charts Styling */
+  /* Pie Chart Container */
   .chart-container {
     position: relative;
     max-width: 260px;
     margin: 0 auto;
-  }
-
-  /* Budget Progress Bar Styling */
-  .budget-item {
-    margin-bottom: 16px;
-  }
-
-  .budget-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
-
-  .progress-bar-bg {
-    width: 100%;
-    height: 8px;
-    background: var(--progress-bg);
-    border-radius: 999px;
-    overflow: hidden;
-  }
-
-  .progress-bar-fill {
-    height: 100%;
-    background: var(--progress-fill);
-    border-radius: 999px;
-    transition: width 0.3s ease;
   }
 
   /* Forms & Inputs */
@@ -272,9 +247,17 @@
     color: var(--text-primary);
   }
 
-  .lg-btn:hover { opacity: 0.9; }
+  .lg-btn.danger-sm {
+    background: transparent;
+    color: var(--danger-red);
+    border: 1px solid var(--danger-red);
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
 
-  /* Pill Tabs (Bills) */
+  /* Segmented Pill Tabs */
   .pill-tabs {
     display: flex;
     background-color: #000000;
@@ -301,6 +284,39 @@
   .pill-tab.active {
     background-color: var(--accent-cream);
     color: var(--accent-dark);
+  }
+
+  /* Dynamic Budget Category Management */
+  .budget-item {
+    background: #101012;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid #1f1f22;
+    margin-bottom: 12px;
+  }
+
+  .budget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: var(--progress-bg);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--progress-fill);
+    border-radius: 999px;
+    transition: width 0.3s ease;
   }
 
   /* List Items */
@@ -340,18 +356,9 @@
 </head>
 <body>
 
-  <!-- Top View Navigation Header -->
-  <div class="nav-tabs">
-    <button class="nav-btn active" onclick="switchMainTab('overview', this)">Overview</button>
-    <button class="nav-btn" onclick="switchMainTab('budget', this)">Budget</button>
-    <button class="nav-btn" onclick="switchMainTab('bills', this)">Bills</button>
-    <button class="nav-btn" onclick="switchMainTab('accounts', this)">Accounts</button>
-    <button class="nav-btn" onclick="switchMainTab('debt', this)">Debt</button>
-  </div>
-
   <!-- OVERVIEW PANEL -->
   <div class="lg-panel active" id="panel-overview">
-    <!-- Total Budget Stat Box with Income & Expenditure -->
+    <!-- Stat Box -->
     <div class="lg-card">
       <div class="stat-box">
         <div class="stat-label">Total Budget</div>
@@ -369,14 +376,14 @@
       </div>
     </div>
 
-    <!-- Dynamic Read-only Calendar -->
+    <!-- Read-only Synced Calendar -->
     <div class="lg-card">
       <h2>Calendar</h2>
       <div class="cal-header" id="cal-month-year">July 2026</div>
       <div class="cal-grid" id="lg-calendar-grid"></div>
     </div>
 
-    <!-- Pie Chart Breakdown -->
+    <!-- Pie Chart -->
     <div class="lg-card">
       <h2>Spending Breakdown</h2>
       <div class="chart-container">
@@ -387,6 +394,7 @@
 
   <!-- BUDGET PANEL -->
   <div class="lg-panel" id="panel-budget">
+    <!-- Log Entry Card -->
     <div class="lg-card">
       <h2>Add Income / Expense</h2>
       <div class="lg-form">
@@ -399,12 +407,8 @@
         </div>
         <div class="field-group">
           <label>Category</label>
-          <select id="lg-budget-cat">
-            <option value="Housing">Housing</option>
-            <option value="Food">Food</option>
-            <option value="Utilities">Utilities</option>
-            <option value="Entertainment">Entertainment</option>
-            <option value="Personal">Personal</option>
+          <select id="lg-budget-cat-select">
+            <!-- Dynamically populated from category object -->
           </select>
         </div>
         <div class="field-group">
@@ -415,11 +419,25 @@
       </div>
     </div>
 
-    <!-- Budget Categories with Progress Bars -->
+    <!-- Manage & View Customizable Categories -->
     <div class="lg-card">
-      <h2>Category Progress</h2>
+      <h2>Categories & Progress</h2>
+      
+      <!-- Create / Edit Category Form -->
+      <div class="lg-form" style="margin-bottom: 20px;">
+        <div class="field-group">
+          <label>New Category Name</label>
+          <input type="text" id="lg-new-cat-name" placeholder="e.g. Subscriptions">
+        </div>
+        <div class="field-group">
+          <label>Target Budget Limit</label>
+          <input type="number" id="lg-new-cat-limit" placeholder="500.00">
+        </div>
+        <button class="lg-btn secondary" onclick="addOrUpdateCategory()">Add / Update Category</button>
+      </div>
+
       <div id="budget-progress-container">
-        <!-- Progress Bars Injected via JS -->
+        <!-- Rendered Categories & Progress Bars -->
       </div>
     </div>
   </div>
@@ -427,37 +445,45 @@
   <!-- BILLS PANEL -->
   <div class="lg-panel" id="panel-bills">
     <div class="lg-card">
-      <!-- Segmented Pill Tabs -->
+      <!-- Pill Tabs -->
       <div class="pill-tabs">
         <button class="pill-tab active" id="tab-btn-upcoming" onclick="switchBillTab('upcoming')">Upcoming</button>
-        <button class="pill-tab" id="tab-btn-recurring" onclick="switchBillTab('recurring')">Recurring</button>
+        <button class="pill-tab" id="tab-btn-new" onclick="switchBillTab('new')">New Bill</button>
       </div>
 
-      <div class="lg-form">
-        <div class="field-group">
-          <label>Bill Name</label>
-          <input type="text" id="lg-bill-name" placeholder="e.g. Internet / Rent">
+      <!-- UPCOMING EXPENSES VIEW -->
+      <div id="view-bills-upcoming">
+        <div class="list-wrapper" id="lg-bills-list">
+          <!-- Upcoming expenses list injected here -->
         </div>
-        <div class="field-group">
-          <label>Amount</label>
-          <input type="number" id="lg-bill-amount" placeholder="0.00">
-        </div>
-        <div class="field-group">
-          <label>Due Date</label>
-          <input type="date" id="lg-bill-date">
-        </div>
-        <div class="field-group">
-          <label>Frequency</label>
-          <select id="lg-bill-freq">
-            <option value="once">Once</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
-        </div>
-        <button class="lg-btn primary" onclick="addBill()">Add Bill</button>
       </div>
 
-      <div class="list-wrapper" id="lg-bills-list"></div>
+      <!-- NEW BILL FORM VIEW -->
+      <div id="view-bills-new" style="display: none;">
+        <div class="lg-form">
+          <div class="field-group">
+            <label>Bill Name</label>
+            <input type="text" id="lg-bill-name" placeholder="e.g. Internet / Rent">
+          </div>
+          <div class="field-group">
+            <label>Amount</label>
+            <input type="number" id="lg-bill-amount" placeholder="0.00">
+          </div>
+          <div class="field-group">
+            <label>Due Date</label>
+            <input type="date" id="lg-bill-date">
+          </div>
+          <div class="field-group">
+            <label>Frequency</label>
+            <select id="lg-bill-freq">
+              <option value="once">Once</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <button class="lg-btn primary" onclick="addBill()">Save Bill</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -501,19 +527,27 @@
     </div>
   </div>
 
+  <!-- Fixed Bottom Navigation Bar -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" onclick="switchMainTab('overview', this)">Overview</button>
+    <button class="nav-btn" onclick="switchMainTab('budget', this)">Budget</button>
+    <button class="nav-btn" onclick="switchMainTab('bills', this)">Bills</button>
+    <button class="nav-btn" onclick="switchMainTab('accounts', this)">Accounts</button>
+    <button class="nav-btn" onclick="switchMainTab('debt', this)">Debt</button>
+  </div>
+
 <script>
-  // Data Store
+  // App State Data
   let bills = [];
   let accounts = [];
   let debts = [];
   let budgetEntries = [];
-  let categoryLimits = { Housing: 1500, Food: 600, Utilities: 400, Entertainment: 300, Personal: 300 };
-  let activeBillTab = 'upcoming';
+  let categories = { Housing: 1500, Food: 600, Utilities: 400, Entertainment: 300, Personal: 300 };
   let pieChart = null;
 
-  // Navigation Controller
+  // Bottom Navigation Controller
   function switchMainTab(tabId, btnElement) {
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.lg-panel').forEach(p => p.classList.remove('active'));
     
     btnElement.classList.add('active');
@@ -524,16 +558,22 @@
       updateOverviewStats();
       renderPieChart();
     } else if (tabId === 'budget') {
+      updateCategorySelectOptions();
       renderBudgetProgress();
     }
   }
 
-  // Bill Pill Tabs Switcher
-  function switchBillTab(type) {
-    activeBillTab = type;
-    document.getElementById('tab-btn-upcoming').classList.toggle('active', type === 'upcoming');
-    document.getElementById('tab-btn-recurring').classList.toggle('active', type === 'recurring');
-    renderBills();
+  // Bill Pill Tabs Switcher (Upcoming vs New Bill)
+  function switchBillTab(tabType) {
+    document.getElementById('tab-btn-upcoming').classList.toggle('active', tabType === 'upcoming');
+    document.getElementById('tab-btn-new').classList.toggle('active', tabType === 'new');
+
+    document.getElementById('view-bills-upcoming').style.display = tabType === 'upcoming' ? 'block' : 'none';
+    document.getElementById('view-bills-new').style.display = tabType === 'new' ? 'block' : 'none';
+
+    if (tabType === 'upcoming') {
+      renderBillsList();
+    }
   }
 
   // Add Bill
@@ -551,23 +591,29 @@
     document.getElementById('lg-bill-amount').value = '';
     document.getElementById('lg-bill-date').value = '';
 
-    renderBills();
+    switchBillTab('upcoming');
     updateOverviewStats();
   }
 
-  function renderBills() {
+  // Render Upcoming Bills List
+  function renderBillsList() {
     const list = document.getElementById('lg-bills-list');
     list.innerHTML = '';
 
-    const filtered = bills.filter(b => activeBillTab === 'recurring' ? b.freq !== 'once' : b.freq === 'once');
+    if (bills.length === 0) {
+      list.innerHTML = '<div style="text-align:center; color: var(--text-secondary); font-size: 14px; padding: 20px;">No upcoming expenses recorded</div>';
+      return;
+    }
 
-    filtered.forEach(b => {
+    bills.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    bills.forEach(b => {
       const item = document.createElement('div');
       item.className = 'list-item';
       item.innerHTML = `
         <div>
           <div class="item-title">${b.name}</div>
-          <div class="item-sub">${b.date} • ${b.freq.charAt(0).toUpperCase() + b.freq.slice(1)}</div>
+          <div class="item-sub">Due: ${b.date} • Recurs: ${b.freq.charAt(0).toUpperCase() + b.freq.slice(1)}</div>
         </div>
         <div class="item-val">$${b.amount.toFixed(2)}</div>
       `;
@@ -575,7 +621,85 @@
     });
   }
 
-  // Add Account (Bank & Number Only)
+  // Category & Budget Progress Management
+  function addOrUpdateCategory() {
+    const name = document.getElementById('lg-new-cat-name').value.trim();
+    const limit = parseFloat(document.getElementById('lg-new-cat-limit').value) || 0;
+
+    if (!name || limit <= 0) return;
+
+    categories[name] = limit;
+
+    document.getElementById('lg-new-cat-name').value = '';
+    document.getElementById('lg-new-cat-limit').value = '';
+
+    updateCategorySelectOptions();
+    renderBudgetProgress();
+  }
+
+  function deleteCategory(catName) {
+    delete categories[catName];
+    updateCategorySelectOptions();
+    renderBudgetProgress();
+  }
+
+  function updateCategorySelectOptions() {
+    const select = document.getElementById('lg-budget-cat-select');
+    select.innerHTML = '';
+    Object.keys(categories).forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.innerText = cat;
+      select.appendChild(opt);
+    });
+  }
+
+  function renderBudgetProgress() {
+    const container = document.getElementById('budget-progress-container');
+    container.innerHTML = '';
+
+    Object.keys(categories).forEach(cat => {
+      const limit = categories[cat];
+      const spent = budgetEntries
+        .filter(e => e.type === 'expense' && e.cat === cat)
+        .reduce((sum, e) => sum + e.amount, 0);
+
+      const percentage = Math.min((spent / limit) * 100, 100);
+
+      const div = document.createElement('div');
+      div.className = 'budget-item';
+      div.innerHTML = `
+        <div class="budget-header">
+          <span>${cat}</span>
+          <div>
+            <span style="margin-right: 8px;">$${spent.toFixed(2)} / $${limit.toFixed(2)}</span>
+            <button class="lg-btn danger-sm" onclick="deleteCategory('${cat}')">Delete</button>
+          </div>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" style="width: ${percentage}%;"></div>
+        </div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  // Add Income / Expense
+  function addBudgetItem() {
+    const type = document.getElementById('lg-budget-type').value;
+    const cat = document.getElementById('lg-budget-cat-select').value;
+    const amount = parseFloat(document.getElementById('lg-budget-amount').value) || 0;
+
+    if (!amount || !cat) return;
+
+    budgetEntries.push({ id: Date.now(), type, cat, amount });
+    document.getElementById('lg-budget-amount').value = '';
+
+    renderBudgetProgress();
+    updateOverviewStats();
+  }
+
+  // Accounts Management
   function addAccount() {
     const bank = document.getElementById('lg-acc-bank').value.trim();
     const number = document.getElementById('lg-acc-number').value.trim();
@@ -607,7 +731,7 @@
     });
   }
 
-  // Add Debt
+  // Debt Management
   function addDebt() {
     const name = document.getElementById('lg-debt-name').value.trim();
     const amount = parseFloat(document.getElementById('lg-debt-amount').value) || 0;
@@ -637,49 +761,7 @@
     });
   }
 
-  // Add Income / Expense in Budget Section
-  function addBudgetItem() {
-    const type = document.getElementById('lg-budget-type').value;
-    const cat = document.getElementById('lg-budget-cat').value;
-    const amount = parseFloat(document.getElementById('lg-budget-amount').value) || 0;
-
-    if (!amount) return;
-
-    budgetEntries.push({ id: Date.now(), type, cat, amount });
-    document.getElementById('lg-budget-amount').value = '';
-
-    renderBudgetProgress();
-    updateOverviewStats();
-  }
-
-  function renderBudgetProgress() {
-    const container = document.getElementById('budget-progress-container');
-    container.innerHTML = '';
-
-    Object.keys(categoryLimits).forEach(cat => {
-      const limit = categoryLimits[cat];
-      const spent = budgetEntries
-        .filter(e => e.type === 'expense' && e.cat === cat)
-        .reduce((sum, e) => sum + e.amount, 0);
-
-      const percentage = Math.min((spent / limit) * 100, 100);
-
-      const div = document.createElement('div');
-      div.className = 'budget-item';
-      div.innerHTML = `
-        <div class="budget-header">
-          <span>${cat}</span>
-          <span>$${spent.toFixed(2)} / $${limit.toFixed(2)}</span>
-        </div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill" style="width: ${percentage}%;"></div>
-        </div>
-      `;
-      container.appendChild(div);
-    });
-  }
-
-  // Update Stats Box
+  // Overview Stats Update
   function updateOverviewStats() {
     const income = budgetEntries.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
     const expenses = budgetEntries.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) + bills.reduce((sum, b) => sum + b.amount, 0);
@@ -690,17 +772,16 @@
     document.getElementById('lg-expenditure-val').innerText = `$${expenses.toFixed(2)}`;
   }
 
-  // Render Overview Pie Chart
+  // Pie Chart Rendering
   function renderPieChart() {
     const ctx = document.getElementById('overviewPieChart').getContext('2d');
     
-    // Group spending by category
     const catTotals = {};
     budgetEntries.filter(e => e.type === 'expense').forEach(e => {
       catTotals[e.cat] = (catTotals[e.cat] || 0) + e.amount;
     });
 
-    const labels = Object.keys(catTotals).length ? Object.keys(catTotals) : ['No Data'];
+    const labels = Object.keys(catTotals).length ? Object.keys(catTotals) : ['No Expenses'];
     const data = Object.keys(catTotals).length ? Object.values(catTotals) : [1];
     const colors = ['#f2efe9', '#e5c158', '#8e8e93', '#ff453a', '#34c759'];
 
@@ -726,7 +807,7 @@
     });
   }
 
-  // Render Calendar and sync bill dots
+  // Calendar Rendering
   function renderCalendar() {
     const grid = document.getElementById('lg-calendar-grid');
     grid.innerHTML = '';
@@ -773,7 +854,8 @@
     }
   }
 
-  // Initial Load
+  // Initial Setup
+  updateCategorySelectOptions();
   renderCalendar();
   renderPieChart();
 </script>
