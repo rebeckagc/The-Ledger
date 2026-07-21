@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Ledger</title>
+<!-- Chart.js for Overview Pie Chart -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Google Sign-In for cross-device sync -->
+<script src="https://accounts.google.com/gsi/client"></script>
+<!-- SheetJS for monthly Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg-color: #0d0d0d;
+    --card-bg: #18181a;
+    --card-border: #26262a;
+    --text-primary: #ffffff;
+    --text-secondary: #8e8e93;
+    --accent-cream: #f2efe9;
+    --accent-dark: #000000;
+    --progress-bg: #2c2c2e;
+    --danger-red: #ff453a;
+    --success-green: #34c759;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    padding: 100px 16px 100px;
+    max-width: 600px;
+    margin: 0 auto;
+    font-variant-numeric: normal;
+    font-feature-settings: "zero" 0;
+  }
+
+  /* Fixed Bottom Navigation Bar */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #141416;
+    border-top: 1px solid var(--card-border);
+    padding: 10px 16px 20px;
+    display: flex;
+    justify-content: space-around;
+    z-index: 1000;
+    max-width: 600px;
+    margin: 0 auto;
+    overflow-x: auto;
+  }
+
+  .nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .nav-btn.active {
+    background: var(--accent-cream);
+    color: var(--accent-dark);
+  }
+
+  /* Panels & Cards */
+  .lg-panel {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .lg-panel.active {
+    display: flex;
+  }
+
+  .lg-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 20px;
+  }
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+  }
+
+  /* Financial Overview Stat Display */
+  .stat-box {
+    text-align: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .stat-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+    text-align: center;
+  }
+
+  .sub-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .sub-stat-value {
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  .income-text { color: var(--success-green); }
+  .expense-text { color: var(--danger-red); }
+
+  /* Calendar */
+  .cal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    text-align: center;
+  }
+
+  .cal-day-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding-bottom: 4px;
+  }
+
+  .cal-cell {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #101012;
+    font-size: 13px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .cal-cell:hover:not(.empty) {
+    background: #1f1f24;
+  }
+
+  .cal-cell.empty {
+    background: transparent;
+    cursor: default;
+  }
+
+  .cal-dots-container {
+    display: flex;
+    gap: 2px;
+    position: absolute;
+    bottom: 3px;
+  }
+
+  .cal-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+  }
+
+  /* Pie Chart Container */
+  .chart-container {
+    position: relative;
+    max-width: 260px;
+    margin: 0 auto;
+  }
+
+  /* Forms & Inputs */
+  .lg-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .field-row .field-group {
+    flex: 1;
+  }
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  input, select {
+    width: 100%;
+    padding: 12px 14px;
+    background: #000000;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-size: 15px;
+    outline: none;
+    font-variant-numeric: normal;
+    font-feature-settings: 'zero' 0;
+  }
+
+  input[type="color"] {
+    padding: 4px;
+    height: 46px;
+    cursor: pointer;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--text-secondary);
+  }
+
+  .lg-btn {
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+  }
+
+  .lg-btn.primary {
+    background: var(--accent-cream);
+    color: var(--accent-dark);
+  }
+
+  .lg-btn.secondary {
+    background: #2c2c2e;
+    color: var(--text-primary);
+  }
+
+  .lg-btn.danger {
+    background: var(--danger-red);
+    color: #ffffff;
+  }
+
+  .lg-btn.edit-sm {
+    background: #2c2c2e;
+    color: var(--text-primary);
+    padding: 4px 10px;
+    font-size: 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+  }
+
+  .lg-btn:hover { opacity: 0.9; }
+
+  /* Segmented Pill Tabs */
+  .pill-tabs {
+    display: flex;
+    background-color: #000000;
+    border-radius: 999px;
+    padding: 4px;
+    gap: 4px;
+    margin-bottom: 16px;
+    border: 1px solid var(--card-border);
+  }
+
+  .pill-tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .pill-tab.active {
+    background-color: var(--accent-cream);
+    color: var(--accent-dark);
+  }
+
+  /* Dynamic Budget Categories */
+  .budget-item {
+    background: #101012;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid #1f1f22;
+    margin-bottom: 12px;
+  }
+
+  .budget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .cat-dot-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .color-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: var(--progress-bg);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+
+  /* List Items */
+  .list-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #101012;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid #1f1f22;
+  }
+
+  .item-title {
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .item-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  .item-val {
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  /* Modals */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    padding: 20px;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+  }
+
+  .modal-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 20px;
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  /* Header: title + greeting */
+  .lg-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .lg-header-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .lg-app-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+  }
+  .lg-greeting {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Sync Bar */
+  .sync-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .sync-status {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .sync-btn {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: #101012;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .sync-btn:hover { border-color: var(--text-secondary); }
+
+  /* Google Sign-In Button (brand-style) */
+  .google-signin-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #ffffff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 9px 16px 9px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .google-signin-btn:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  .google-signin-btn svg { flex-shrink: 0; }
+
+  /* Floating Quick-Add Button */
+  .fab-quick-add {
+    position: fixed;
+    right: 20px;
+    bottom: 96px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent-cream);
+    color: var(--accent-dark);
+    border: none;
+    font-size: 30px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+    z-index: 1500;
+  }
+  .fab-quick-add:active { transform: scale(0.94); }
+</style>
+</head>
+<body>
+
+  <div class="lg-header" id="lg-header">
+    <div class="lg-header-row">
+      <button class="google-signin-btn" id="lg-google-signin" onclick="handleSignIn()">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.2-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.6l6.2 5.2C39.9 36.6 44 31 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+        <span id="lg-google-signin-label">Sign in with Google</span>
+      </button>
+      <span class="lg-app-title">The Ledger</span>
+    </div>
+    <div class="lg-greeting" id="lg-greeting">Hello</div>
+    <span class="sync-status" id="lg-sync-status">Saving on this device only</span>
+  </div>
+
+  <button class="fab-quick-add" id="lg-fab-add" onclick="openQuickAddModal()" aria-label="Quick add expense">+</button>
+
+  <!-- QUICK ADD EXPENSE MODAL -->
+  <div class="modal-overlay" id="quick-add-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 style="margin:0;">Quick Add Expense</h2>
+        <button class="close-btn" onclick="closeModal('quick-add-modal')">&times;</button>
+      </div>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Category</label>
+          <select id="quick-add-cat"></select>
+        </div>
+        <div class="field-group">
+          <label>Amount</label>
+          <input type="number" id="quick-add-amount" placeholder="0.00">
+        </div>
+        <button class="lg-btn primary" onclick="submitQuickAdd()">Add Expense</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OVERVIEW PANEL -->
+  <div class="lg-panel active" id="panel-overview">
+    <div class="lg-card">
+      <div class="stat-box">
+        <div class="stat-label">Total Budget (This Month)</div>
+        <div class="stat-value" id="lg-total-budget">$0.00</div>
+      </div>
+      <div class="stat-grid">
+        <div>
+          <div class="sub-stat-label">Income</div>
+          <div class="sub-stat-value income-text" id="lg-income-val">$0.00</div>
+        </div>
+        <div>
+          <div class="sub-stat-label">Expenditure</div>
+          <div class="sub-stat-value expense-text" id="lg-expenditure-val">$0.00</div>
+        </div>
+      </div>
+      <button class="lg-btn secondary" style="margin-top: 16px;" onclick="exportMonthToExcel()">Export Month to Excel</button>
+    </div>
+
+    <div class="lg-card">
+      <h2>Calendar</h2>
+      <div class="cal-header" id="cal-month-year">July 2026</div>
+      <div class="cal-grid" id="lg-calendar-grid"></div>
+    </div>
+
+    <div class="lg-card">
+      <h2>Spending Breakdown</h2>
+      <div class="chart-container" style="max-width: 100%; height: 420px;">
+        <canvas id="overviewSpendingChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- BUDGET PANEL -->
+  <div class="lg-panel" id="panel-budget">
+    <div class="lg-card">
+      <h2>Add Income / Expense</h2>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Type</label>
+          <select id="lg-budget-type">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Category</label>
+          <select id="lg-budget-cat-select"></select>
+        </div>
+        <div class="field-group">
+          <label>Amount</label>
+          <input type="number" id="lg-budget-amount" placeholder="0.00">
+        </div>
+        <button class="lg-btn primary" onclick="addBudgetItem()">Add Entry</button>
+      </div>
+    </div>
+
+    <div class="lg-card">
+      <h2>Categories & Progress</h2>
+      <div class="lg-form" style="margin-bottom: 20px;">
+        <div class="field-group">
+          <label>Category Name</label>
+          <input type="text" id="lg-new-cat-name" placeholder="e.g. Subscriptions">
+        </div>
+        <div class="field-group">
+          <label>Group</label>
+          <select id="lg-new-cat-group">
+            <option value="Rent & Utilities">Rent & Utilities</option>
+            <option value="Loans">Loans</option>
+            <option value="Subscriptions">Subscriptions</option>
+            <option value="Living Expenses">Living Expenses</option>
+            <option value="Dogs">Dogs</option>
+            <option value="Savings">Savings</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label>Target Budget</label>
+            <input type="number" id="lg-new-cat-limit" placeholder="500.00">
+          </div>
+          <div class="field-group" style="max-width: 70px;">
+            <label>Color</label>
+            <input type="color" id="lg-new-cat-color" value="#e5c158">
+          </div>
+        </div>
+        <button class="lg-btn secondary" onclick="addCategory()">Add Category</button>
+      </div>
+
+      <div id="budget-progress-container"></div>
+    </div>
+  </div>
+
+  <!-- BILLS PANEL -->
+  <div class="lg-panel" id="panel-bills">
+    <div class="lg-card">
+      <div class="pill-tabs">
+        <button class="pill-tab active" id="tab-btn-upcoming" onclick="switchBillTab('upcoming')">Upcoming</button>
+        <button class="pill-tab" id="tab-btn-new" onclick="switchBillTab('new')">New Bill</button>
+      </div>
+
+      <div id="view-bills-upcoming">
+        <div class="list-wrapper" id="lg-bills-list"></div>
+      </div>
+
+      <div id="view-bills-new" style="display: none;">
+        <div class="lg-form">
+          <div class="field-group">
+            <label>Bill Name</label>
+            <input type="text" id="lg-bill-name" placeholder="e.g. Internet / Rent">
+          </div>
+          <div class="field-group">
+            <label>Category</label>
+            <select id="lg-bill-cat-select"></select>
+          </div>
+          <div class="field-group">
+            <label>Amount</label>
+            <input type="number" id="lg-bill-amount" placeholder="0.00">
+          </div>
+          <div class="field-group">
+            <label>Due Date</label>
+            <input type="date" id="lg-bill-date">
+          </div>
+          <div class="field-group">
+            <label>Frequency</label>
+            <select id="lg-bill-freq">
+              <option value="once">Once</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <button class="lg-btn primary" onclick="addBill()">Save Bill</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAVINGS PANEL -->
+  <div class="lg-panel" id="panel-savings">
+    <div class="lg-card">
+      <h2>Add Savings</h2>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Type</label>
+          <select id="lg-savings-type" onchange="toggleSinkingFields()">
+            <option value="Savings">Savings</option>
+            <option value="Investments">Investments</option>
+            <option value="Sinking Fund">Sinking Fund</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Name</label>
+          <input type="text" id="lg-savings-name" placeholder="e.g. Emergency Fund / New Car">
+        </div>
+        <div class="field-group">
+          <label id="lg-savings-amount-label">Current Amount</label>
+          <input type="number" id="lg-savings-amount" placeholder="0.00">
+        </div>
+        <div id="lg-sinking-fields" style="display:none; display: flex; flex-direction: column; gap: 12px;">
+          <div class="field-group">
+            <label>Goal Amount</label>
+            <input type="number" id="lg-savings-goal" placeholder="0.00">
+          </div>
+          <div class="field-group">
+            <label>Date By</label>
+            <input type="date" id="lg-savings-date">
+          </div>
+        </div>
+        <button class="lg-btn primary" onclick="addSavings()">Add</button>
+      </div>
+    </div>
+
+    <div class="lg-card">
+      <h2>Savings & Goals</h2>
+      <div class="list-wrapper" id="lg-savings-list" style="margin-top: 0;"></div>
+    </div>
+  </div>
+
+  <!-- ACCOUNTS PANEL -->
+  <div class="lg-panel" id="panel-accounts">
+    <div class="lg-card">
+      <h2>Accounts</h2>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Bank</label>
+          <input type="text" id="lg-acc-bank" placeholder="e.g. First Citizens">
+        </div>
+        <div class="field-group">
+          <label>Account Number</label>
+          <input type="text" id="lg-acc-number" placeholder="e.g. 000000000000">
+        </div>
+        <div class="field-group">
+          <label>Balance</label>
+          <input type="number" id="lg-acc-balance" placeholder="0.00">
+        </div>
+        <button class="lg-btn secondary" onclick="addAccount()">Add Account</button>
+      </div>
+
+      <div class="list-wrapper" id="lg-accounts-list"></div>
+    </div>
+  </div>
+
+  <!-- NET WORTH PANEL (Debt & Assets) -->
+  <div class="lg-panel" id="panel-debt">
+    <div class="lg-card">
+      <div class="stat-box">
+        <div class="stat-label">Net Worth</div>
+        <div class="stat-value" id="lg-net-worth">$0.00</div>
+      </div>
+      <div class="stat-grid">
+        <div>
+          <div class="sub-stat-label">Total Assets</div>
+          <div class="sub-stat-value income-text" id="lg-total-assets-val">$0.00</div>
+        </div>
+        <div>
+          <div class="sub-stat-label">Total Debts</div>
+          <div class="sub-stat-value expense-text" id="lg-total-debts-val">$0.00</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lg-card">
+      <h2>Debt Summary</h2>
+      <div class="stat-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div>
+          <div class="sub-stat-label">Total Owed</div>
+          <div class="sub-stat-value expense-text" id="lg-debt-total-owed">$0.00</div>
+        </div>
+        <div>
+          <div class="sub-stat-label">Min. Payments</div>
+          <div class="sub-stat-value" id="lg-debt-total-min">$0.00</div>
+        </div>
+        <div>
+          <div class="sub-stat-label">Avg. Rate</div>
+          <div class="sub-stat-value" id="lg-debt-avg-rate">0.00%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lg-card">
+      <h2>Debt Tracker</h2>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Debt Name</label>
+          <input type="text" id="lg-debt-name" placeholder="e.g. Credit Card / Loan">
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label>Balance Owed</label>
+            <input type="number" id="lg-debt-amount" placeholder="0.00">
+          </div>
+          <div class="field-group">
+            <label>Interest Rate (%)</label>
+            <input type="number" id="lg-debt-rate" placeholder="0.0" step="0.01">
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Minimum Payment</label>
+          <input type="number" id="lg-debt-min-payment" placeholder="0.00">
+        </div>
+        <button class="lg-btn primary" onclick="addDebt()">Add Debt</button>
+      </div>
+
+      <div class="list-wrapper" id="lg-debt-list"></div>
+    </div>
+
+    <div class="lg-card">
+      <h2>Assets Tracker</h2>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Asset Name</label>
+          <input type="text" id="lg-asset-name" placeholder="e.g. Emergency Fund / Toyota">
+        </div>
+        <div class="field-group">
+          <label>Asset Type</label>
+          <select id="lg-asset-type">
+            <option value="Savings">Savings</option>
+            <option value="Investments">Investments</option>
+            <option value="House/Car">House/Car</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Estimated Value</label>
+          <input type="number" id="lg-asset-amount" placeholder="0.00">
+        </div>
+        <button class="lg-btn primary" onclick="addAsset()">Add Asset</button>
+      </div>
+
+      <div class="list-wrapper" id="lg-asset-list"></div>
+    </div>
+  </div>
+
+  <!-- CALENDAR POPUP MODAL -->
+  <div class="modal-overlay" id="cal-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-date-title" style="margin:0;">Details</h2>
+        <button class="close-btn" onclick="closeModal('cal-modal')">&times;</button>
+      </div>
+      <div id="modal-date-content" class="list-wrapper"></div>
+    </div>
+  </div>
+
+  <!-- EDIT CATEGORY MODAL -->
+  <div class="modal-overlay" id="edit-cat-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="edit-cat-title" style="margin:0;">Edit Category</h2>
+        <button class="close-btn" onclick="closeModal('edit-cat-modal')">&times;</button>
+      </div>
+      <div class="lg-form">
+        <input type="hidden" id="edit-cat-original-name">
+        <div class="field-group">
+          <label>Target Budget Limit</label>
+          <input type="number" id="edit-cat-limit" placeholder="0.00">
+        </div>
+        <button class="lg-btn primary" onclick="saveCategoryEdit()">Save Target</button>
+        <button class="lg-btn danger" onclick="deleteCategoryFromModal()">Delete Category</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT DEBT MODAL -->
+  <div class="modal-overlay" id="edit-debt-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 style="margin:0;">Edit Debt</h2>
+        <button class="close-btn" onclick="closeModal('edit-debt-modal')">&times;</button>
+      </div>
+      <div class="lg-form">
+        <input type="hidden" id="edit-debt-id">
+        <div class="field-group">
+          <label>Debt Name</label>
+          <input type="text" id="edit-debt-name">
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label>Balance Owed</label>
+            <input type="number" id="edit-debt-amount">
+          </div>
+          <div class="field-group">
+            <label>Interest Rate (%)</label>
+            <input type="number" id="edit-debt-rate" step="0.01">
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Minimum Payment</label>
+          <input type="number" id="edit-debt-min-payment">
+        </div>
+        <button class="lg-btn primary" onclick="saveDebtEdit()">Save Changes</button>
+        <button class="lg-btn danger" onclick="deleteDebtFromModal()">Delete Debt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT ASSET MODAL -->
+  <div class="modal-overlay" id="edit-asset-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 style="margin:0;">Edit Asset</h2>
+        <button class="close-btn" onclick="closeModal('edit-asset-modal')">&times;</button>
+      </div>
+      <div class="lg-form">
+        <input type="hidden" id="edit-asset-id">
+        <div class="field-group">
+          <label>Asset Name</label>
+          <input type="text" id="edit-asset-name">
+        </div>
+        <div class="field-group">
+          <label>Asset Type</label>
+          <select id="edit-asset-type">
+            <option value="Savings">Savings</option>
+            <option value="Investments">Investments</option>
+            <option value="House/Car">House/Car</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Estimated Value</label>
+          <input type="number" id="edit-asset-amount">
+        </div>
+        <button class="lg-btn primary" onclick="saveAssetEdit()">Save Changes</button>
+        <button class="lg-btn danger" onclick="deleteAssetFromModal()">Delete Asset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT SAVINGS MODAL -->
+  <div class="modal-overlay" id="edit-savings-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 style="margin:0;">Edit Savings</h2>
+        <button class="close-btn" onclick="closeModal('edit-savings-modal')">&times;</button>
+      </div>
+      <div class="lg-form">
+        <input type="hidden" id="edit-savings-id">
+        <div class="field-group">
+          <label>Name</label>
+          <input type="text" id="edit-savings-name">
+        </div>
+        <div class="field-group">
+          <label id="edit-savings-amount-label">Current Amount</label>
+          <input type="number" id="edit-savings-amount">
+        </div>
+        <div id="edit-sinking-fields" style="display:flex; flex-direction: column; gap: 12px;">
+          <div class="field-group">
+            <label>Goal Amount</label>
+            <input type="number" id="edit-savings-goal">
+          </div>
+          <div class="field-group">
+            <label>Date By</label>
+            <input type="date" id="edit-savings-date">
+          </div>
+        </div>
+        <button class="lg-btn primary" onclick="saveSavingsEdit()">Save Changes</button>
+        <button class="lg-btn danger" onclick="deleteSavingsFromModal()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation Bar -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" onclick="switchMainTab('overview', this)">Overview</button>
+    <button class="nav-btn" onclick="switchMainTab('budget', this)">Budget</button>
+    <button class="nav-btn" onclick="switchMainTab('bills', this)">Bills</button>
+    <button class="nav-btn" onclick="switchMainTab('savings', this)">Savings</button>
+    <button class="nav-btn" onclick="switchMainTab('accounts', this)">Accounts</button>
+    <button class="nav-btn" onclick="switchMainTab('debt', this)">Net Worth</button>
+  </div>
+
+<script>
+  // ---- Sync configuration ----
+  const STORAGE_KEY = 'ledgerAppDataV2';
+  const CLIENT_ID = '1090005722467-1637lpril2kim2qkslm75rfgu4ph1osv.apps.googleusercontent.com';
+  const SPREADSHEET_ID = '1DK_UeDxronYKYFiTEByACeVSMjcRWb3HTSBDKDE1icE';
+  const SHEET_TAB_NAME = 'LedgerData';
+  let accessToken = null;
+  let tokenClient = null;
+  let pushTimer = null;
+  let lastUpdatedAt = 0;
+
+  // App Data Store
+  let bills = [];
+  let accounts = [];
+  let debts = [];
+  let assets = [];
+  let savingsItems = [];
+  let budgetEntries = [];
+  // Categories grouped under parent headers, each with its own budget limit/color.
+  // Limit amounts carried over from prior category values where a clear match existed;
+  // new subcategories (Phone, WiFi, First Citizens, Scotiabank, Training, HBO Max, Amazon Prime,
+  // Miscellaneous) were given starter limits that can be adjusted from the Budget tab.
+  let categories = {
+    // Rent & Utilities
+    'Rent':          { limit: 8800, color: '#f2efe9', group: 'Rent & Utilities' },
+    'Electricity':   { limit: 600,  color: '#ff453a', group: 'Rent & Utilities' },
+    'Phone':         { limit: 500,  color: '#64d2ff', group: 'Rent & Utilities' },
+    'WiFi':          { limit: 420,  color: '#5ac8fa', group: 'Rent & Utilities' },
+
+    // Loans
+    'First Citizens': { limit: 1850, color: '#ffd60a', group: 'Loans' },
+    'Scotiabank':      { limit: 2202, color: '#e5c158', group: 'Loans' },
+
+    // Subscriptions
+    'Eufy':          { limit: 70,    color: '#64d2ff', group: 'Subscriptions' },
+    'iCloud':        { limit: 70,    color: '#ffd60a', group: 'Subscriptions' },
+    'Disney Plus':   { limit: 108,   color: '#ff9f0a', group: 'Subscriptions' },
+    'Spotify':       { limit: 60.32, color: '#f2efe9', group: 'Subscriptions' },
+    'HBO Max':       { limit: 100,   color: '#bf5af2', group: 'Subscriptions' },
+    'Netflix':       { limit: 170,   color: '#34c759', group: 'Subscriptions' },
+    'Amazon Prime':  { limit: 50,    color: '#8e8e93', group: 'Subscriptions' },
+
+    // Living Expenses
+    'Groceries':     { limit: 5500, color: '#e5c158', group: 'Living Expenses' },
+    'Food':          { limit: 1500, color: '#64d2ff', group: 'Living Expenses' },
+    'Training':      { limit: 600,  color: '#5ac8fa', group: 'Living Expenses' },
+    'Gym':           { limit: 350,  color: '#5ac8fa', group: 'Living Expenses' },
+    'Gas':           { limit: 1800, color: '#ff9f0a', group: 'Living Expenses' },
+    'Supplements':   { limit: 600,  color: '#8e8e93', group: 'Living Expenses' },
+    'Medication':    { limit: 2050, color: '#bf5af2', group: 'Living Expenses' },
+    'Rebecka':       { limit: 1000, color: '#f2efe9', group: 'Living Expenses' },
+    'Jhonel':        { limit: 1000, color: '#ffd60a', group: 'Living Expenses' },
+    'Massages':      { limit: 1000, color: '#e5c158', group: 'Living Expenses' },
+    'Miscellaneous': { limit: 300,  color: '#ff453a', group: 'Living Expenses' },
+
+    // Dogs
+    'Dogs':          { limit: 1200, color: '#bf5af2', group: 'Dogs' },
+
+    // Savings
+    'Savings':       { limit: 1000, color: '#34c759', group: 'Savings' }
+  };
+  let spendingChart = null;
+
+  // ---- Persistence: local storage + optional Google Sheets sync ----
+  function getStateSnapshot(){
+    return { bills, accounts, debts, assets, savingsItems, budgetEntries, categories, updatedAt: lastUpdatedAt };
+  }
+
+  function applyStateSnapshot(s){
+    bills = s.bills || [];
+    accounts = s.accounts || [];
+    debts = s.debts || [];
+    assets = s.assets || [];
+    savingsItems = s.savingsItems || [];
+    budgetEntries = s.budgetEntries || [];
+    categories = s.categories || categories;
+    lastUpdatedAt = s.updatedAt || 0;
+  }
+
+  function saveLocal(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(getStateSnapshot())); }
+    catch(e){ console.error('Local save failed', e); }
+  }
+
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){ applyStateSnapshot(JSON.parse(raw)); }
+    }catch(e){ console.error('Local load failed', e); }
+  }
+
+  function persist(){
+    lastUpdatedAt = Date.now();
+    saveLocal();
+    if(accessToken){
+      setSyncStatus('Syncing…');
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(pushToSheet, 800);
+    }
+  }
+
+  function setSyncStatus(msg){
+    const el = document.getElementById('lg-sync-status');
+    if(el) el.textContent = msg;
+  }
+
+  function handleSignIn(){
+    if(tokenClient) tokenClient.requestAccessToken();
+  }
+
+  function initGoogleAuth(){
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile',
+      callback: async (resp) => {
+        if(resp && resp.access_token){
+          accessToken = resp.access_token;
+          document.getElementById('lg-google-signin-label').textContent = 'Signed in';
+          setSyncStatus('Signed in — syncing…');
+          await updateGreetingFromProfile();
+          await syncFromSheet();
+          refreshAllViews();
+        }
+      }
+    });
+  }
+
+  async function updateGreetingFromProfile(){
+    try{
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if(!res.ok) return;
+      const info = await res.json();
+      const name = info.given_name || info.name;
+      if(name){ document.getElementById('lg-greeting').innerText = `Hello ${name}`; }
+    }catch(e){ console.error('Could not load profile for greeting', e); }
+  }
+
+  function waitForGoogleAuth(){
+    if(window.google && google.accounts && google.accounts.oauth2){ initGoogleAuth(); }
+    else setTimeout(waitForGoogleAuth, 200);
+  }
+
+  async function sheetsFetch(path, options){
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}${path}`, Object.assign({
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+    }, options));
+    if(!res.ok){ throw new Error('Sheets API error: ' + res.status); }
+    return res.json();
+  }
+
+  async function ensureSheetTabExists(){
+    const meta = await sheetsFetch('');
+    const exists = meta.sheets.some(s => s.properties.title === SHEET_TAB_NAME);
+    if(!exists){
+      await sheetsFetch(':batchUpdate', {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: SHEET_TAB_NAME } } }] })
+      });
+    }
+  }
+
+  async function syncFromSheet(){
+    try{
+      await ensureSheetTabExists();
+      const data = await sheetsFetch(`/values/${encodeURIComponent(SHEET_TAB_NAME + '!A1')}`);
+      const cell = data.values && data.values[0] && data.values[0][0];
+      if(cell){
+        const remote = JSON.parse(cell);
+        if(!lastUpdatedAt || (remote.updatedAt && remote.updatedAt > lastUpdatedAt)){
+          applyStateSnapshot(remote);
+          saveLocal();
+        } else if(lastUpdatedAt > (remote.updatedAt || 0)){
+          await pushToSheet();
+        }
+        setSyncStatus('Synced just now');
+      } else {
+        await pushToSheet();
+      }
+    }catch(e){
+      console.error(e);
+      setSyncStatus('Sync failed — check console');
+    }
+  }
+
+  async function pushToSheet(){
+    if(!accessToken) return;
+    try{
+      await ensureSheetTabExists();
+      await sheetsFetch(`/values/${encodeURIComponent(SHEET_TAB_NAME + '!A1')}?valueInputOption=RAW`, {
+        method: 'PUT',
+        body: JSON.stringify({ values: [[JSON.stringify(getStateSnapshot())]] })
+      });
+      setSyncStatus('Synced just now');
+    }catch(e){
+      console.error(e);
+      setSyncStatus('Sync failed — will retry on next change');
+    }
+  }
+
+  function refreshAllViews(){
+    updateCategorySelectOptions();
+    renderBudgetProgress();
+    renderBillsList();
+    renderAccounts();
+    renderDebts();
+    renderAssets();
+    renderSavings();
+    updateOverviewStats();
+    renderCalendar();
+    renderSpendingChart();
+  }
+
+  // Bottom Navigation Controller
+  function switchMainTab(tabId, btnElement) {
+    document.querySelectorAll('.bottom-nav .nav-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.lg-panel').forEach(p => p.classList.remove('active'));
+    
+    btnElement.classList.add('active');
+    document.getElementById(`panel-${tabId}`).classList.add('active');
+
+    document.getElementById('lg-fab-add').style.display = tabId === 'overview' ? 'flex' : 'none';
+    document.getElementById('lg-header').style.display = tabId === 'overview' ? 'flex' : 'none';
+
+    if (tabId === 'overview') {
+      renderCalendar();
+      updateOverviewStats();
+      renderSpendingChart();
+    } else if (tabId === 'budget') {
+      updateCategorySelectOptions();
+      renderBudgetProgress();
+    } else if (tabId === 'bills') {
+      updateCategorySelectOptions();
+    } else if (tabId === 'savings') {
+      renderSavings();
+    } else if (tabId === 'debt') {
+      renderDebts();
+      renderAssets();
+      updateOverviewStats();
+    }
+  }
+
+  // Quick Add Expense (floating button, Overview page only)
+  function openQuickAddModal() {
+    updateCategorySelectOptions();
+    document.getElementById('quick-add-amount').value = '';
+    document.getElementById('quick-add-modal').classList.add('active');
+  }
+
+  function submitQuickAdd() {
+    const cat = document.getElementById('quick-add-cat').value;
+    const amount = parseFloat(document.getElementById('quick-add-amount').value) || 0;
+    if (!cat || !amount) return;
+
+    budgetEntries.push({ id: Date.now(), type: 'expense', cat, amount });
+
+    closeModal('quick-add-modal');
+    renderBudgetProgress();
+    updateOverviewStats();
+    renderSpendingChart();
+    persist();
+  }
+
+  // Bill Pill Tabs Switcher
+  function switchBillTab(tabType) {
+    document.getElementById('tab-btn-upcoming').classList.toggle('active', tabType === 'upcoming');
+    document.getElementById('tab-btn-new').classList.toggle('active', tabType === 'new');
+
+    document.getElementById('view-bills-upcoming').style.display = tabType === 'upcoming' ? 'block' : 'none';
+    document.getElementById('view-bills-new').style.display = tabType === 'new' ? 'block' : 'none';
+
+    if (tabType === 'upcoming') {
+      renderBillsList();
+    }
+  }
+
+  // Modals
+  function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+  }
+
+  // Add Bill
+  function addBill() {
+    const name = document.getElementById('lg-bill-name').value.trim();
+    const cat = document.getElementById('lg-bill-cat-select').value;
+    const amount = parseFloat(document.getElementById('lg-bill-amount').value) || 0;
+    const date = document.getElementById('lg-bill-date').value;
+    const freq = document.getElementById('lg-bill-freq').value;
+
+    if (!name || !date || !amount) return;
+
+    bills.push({ id: Date.now(), name, cat, amount, date, freq });
+
+    document.getElementById('lg-bill-name').value = '';
+    document.getElementById('lg-bill-amount').value = '';
+    document.getElementById('lg-bill-date').value = '';
+
+    switchBillTab('upcoming');
+    updateOverviewStats();
+    persist();
+  }
+
+  function renderBillsList() {
+    const list = document.getElementById('lg-bills-list');
+    list.innerHTML = '';
+
+    if (bills.length === 0) {
+      list.innerHTML = '<div style="text-align:center; color: var(--text-secondary); font-size: 14px; padding: 20px;">No upcoming expenses</div>';
+      return;
+    }
+
+    bills.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    bills.forEach(b => {
+      const catColor = categories[b.cat]?.color || '#8e8e93';
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `
+        <div>
+          <div class="item-title">
+            <span class="color-indicator" style="background-color: ${catColor};"></span>
+            ${b.name}
+          </div>
+          <div class="item-sub">Due: ${b.date} • Recurs: ${b.freq.charAt(0).toUpperCase() + b.freq.slice(1)}</div>
+        </div>
+        <div class="item-val">$${b.amount.toFixed(2)}</div>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  // Categories & Budget Progress Management
+  function addCategory() {
+    const name = document.getElementById('lg-new-cat-name').value.trim();
+    const limit = parseFloat(document.getElementById('lg-new-cat-limit').value) || 0;
+    const color = document.getElementById('lg-new-cat-color').value;
+    const group = document.getElementById('lg-new-cat-group').value;
+
+    if (!name || limit <= 0) return;
+
+    categories[name] = { limit, color, group };
+
+    document.getElementById('lg-new-cat-name').value = '';
+    document.getElementById('lg-new-cat-limit').value = '';
+
+    updateCategorySelectOptions();
+    renderBudgetProgress();
+    persist();
+  }
+
+  function openEditCategoryModal(catName) {
+    document.getElementById('edit-cat-title').innerText = `Edit ${catName}`;
+    document.getElementById('edit-cat-original-name').value = catName;
+    document.getElementById('edit-cat-limit').value = categories[catName].limit;
+    document.getElementById('edit-cat-modal').classList.add('active');
+  }
+
+  function saveCategoryEdit() {
+    const catName = document.getElementById('edit-cat-original-name').value;
+    const limit = parseFloat(document.getElementById('edit-cat-limit').value) || 0;
+
+    if (limit > 0 && categories[catName]) {
+      categories[catName].limit = limit;
+      renderBudgetProgress();
+      persist();
+    }
+    closeModal('edit-cat-modal');
+  }
+
+  function deleteCategoryFromModal() {
+    const catName = document.getElementById('edit-cat-original-name').value;
+    delete categories[catName];
+    updateCategorySelectOptions();
+    renderBudgetProgress();
+    persist();
+    closeModal('edit-cat-modal');
+  }
+
+  function updateCategorySelectOptions() {
+    const bSelect = document.getElementById('lg-budget-cat-select');
+    const billSelect = document.getElementById('lg-bill-cat-select');
+    const quickSelect = document.getElementById('quick-add-cat');
+
+    bSelect.innerHTML = '';
+    billSelect.innerHTML = '';
+    quickSelect.innerHTML = '';
+
+    // Group subcategories under their parent category as <optgroup>s
+    const groups = {};
+    Object.keys(categories).forEach(cat => {
+      const g = categories[cat].group || 'Other';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(cat);
+    });
+
+    [bSelect, billSelect, quickSelect].forEach(select => {
+      Object.keys(groups).forEach(groupName => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = groupName;
+        groups[groupName].forEach(cat => {
+          const opt = document.createElement('option');
+          opt.value = cat;
+          opt.innerText = cat;
+          optgroup.appendChild(opt);
+        });
+        select.appendChild(optgroup);
+      });
+    });
+  }
+
+  function renderBudgetProgress() {
+    const container = document.getElementById('budget-progress-container');
+    container.innerHTML = '';
+
+    // Group subcategories under their parent category
+    const groups = {};
+    Object.keys(categories).forEach(cat => {
+      const g = categories[cat].group || 'Other';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(cat);
+    });
+
+    Object.keys(groups).forEach(groupName => {
+      const groupHeader = document.createElement('div');
+      groupHeader.style.cssText = 'font-size:13px; font-weight:700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 8px;';
+      groupHeader.innerText = groupName;
+      container.appendChild(groupHeader);
+
+      groups[groupName].forEach(cat => {
+        const catData = categories[cat];
+        const limit = catData.limit;
+        const spent = budgetEntries
+          .filter(e => e.type === 'expense' && e.cat === cat)
+          .reduce((sum, e) => sum + e.amount, 0) +
+          bills.filter(b => b.cat === cat).reduce((sum, b) => sum + b.amount, 0);
+
+        const percentage = Math.min((spent / limit) * 100, 100);
+
+        const div = document.createElement('div');
+        div.className = 'budget-item';
+        div.innerHTML = `
+          <div class="budget-header">
+            <div class="cat-dot-label">
+              <span class="color-indicator" style="background-color: ${catData.color}"></span>
+              <span>${cat}</span>
+            </div>
+            <div>
+              <span style="margin-right: 8px;">$${spent.toFixed(2)} / $${limit.toFixed(2)}</span>
+              <button class="lg-btn edit-sm" onclick="openEditCategoryModal('${cat}')">Edit</button>
+            </div>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: ${percentage}%; background-color: ${catData.color}"></div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    });
+  }
+
+  // Add Income / Expense
+  function addBudgetItem() {
+    const type = document.getElementById('lg-budget-type').value;
+    const cat = document.getElementById('lg-budget-cat-select').value;
+    const amount = parseFloat(document.getElementById('lg-budget-amount').value) || 0;
+
+    if (!amount || !cat) return;
+
+    budgetEntries.push({ id: Date.now(), type, cat, amount });
+    document.getElementById('lg-budget-amount').value = '';
+
+    renderBudgetProgress();
+    updateOverviewStats();
+    persist();
+  }
+
+  // Accounts Management
+  function addAccount() {
+    const bank = document.getElementById('lg-acc-bank').value.trim();
+    const number = document.getElementById('lg-acc-number').value.trim();
+    const balance = parseFloat(document.getElementById('lg-acc-balance').value) || 0;
+
+    if (!bank || !number) return;
+
+    accounts.push({ id: Date.now(), bank, number, balance });
+
+    document.getElementById('lg-acc-bank').value = '';
+    document.getElementById('lg-acc-number').value = '';
+    document.getElementById('lg-acc-balance').value = '';
+
+    renderAccounts();
+    persist();
+  }
+
+  function renderAccounts() {
+    const list = document.getElementById('lg-accounts-list');
+    list.innerHTML = '';
+
+    accounts.forEach(a => {
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `
+        <div>
+          <div class="item-title">${a.bank}</div>
+          <div class="item-sub">Acc: ${a.number}</div>
+        </div>
+        <div class="item-val">$${a.balance.toFixed(2)}</div>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  // Debt & Asset Management
+  function addDebt() {
+    const name = document.getElementById('lg-debt-name').value.trim();
+    const balance = parseFloat(document.getElementById('lg-debt-amount').value) || 0;
+    const rate = parseFloat(document.getElementById('lg-debt-rate').value) || 0;
+    const minPayment = parseFloat(document.getElementById('lg-debt-min-payment').value) || 0;
+
+    if (!name || !balance) return;
+
+    debts.push({ id: Date.now(), name, balance, rate, minPayment });
+
+    document.getElementById('lg-debt-name').value = '';
+    document.getElementById('lg-debt-amount').value = '';
+    document.getElementById('lg-debt-rate').value = '';
+    document.getElementById('lg-debt-min-payment').value = '';
+
+    renderDebts();
+    updateOverviewStats();
+    persist();
+  }
+
+  function logDebtPayment(debtId) {
+    const input = document.getElementById(`debt-pay-${debtId}`);
+    const amt = parseFloat(input.value) || 0;
+    if (!amt) return;
+    const debt = debts.find(d => d.id === debtId);
+    if (debt) {
+      debt.balance = Math.max(0, debt.balance - amt);
+      renderDebts();
+      updateOverviewStats();
+      persist();
+    }
+  }
+
+  function removeDebt(debtId) {
+    debts = debts.filter(d => d.id !== debtId);
+    renderDebts();
+    updateOverviewStats();
+    persist();
+  }
+
+  function openEditDebtModal(debtId) {
+    const debt = debts.find(d => d.id === debtId);
+    if (!debt) return;
+    document.getElementById('edit-debt-id').value = debt.id;
+    document.getElementById('edit-debt-name').value = debt.name;
+    document.getElementById('edit-debt-amount').value = debt.balance;
+    document.getElementById('edit-debt-rate').value = debt.rate || 0;
+    document.getElementById('edit-debt-min-payment').value = debt.minPayment || 0;
+    document.getElementById('edit-debt-modal').classList.add('active');
+  }
+
+  function saveDebtEdit() {
+    const id = parseInt(document.getElementById('edit-debt-id').value);
+    const debt = debts.find(d => d.id === id);
+    if (!debt) return;
+    debt.name = document.getElementById('edit-debt-name').value.trim() || debt.name;
+    debt.balance = parseFloat(document.getElementById('edit-debt-amount').value) || 0;
+    debt.rate = parseFloat(document.getElementById('edit-debt-rate').value) || 0;
+    debt.minPayment = parseFloat(document.getElementById('edit-debt-min-payment').value) || 0;
+    renderDebts();
+    updateOverviewStats();
+    persist();
+    closeModal('edit-debt-modal');
+  }
+
+  function deleteDebtFromModal() {
+    const id = parseInt(document.getElementById('edit-debt-id').value);
+    removeDebt(id);
+    closeModal('edit-debt-modal');
+  }
+
+  function renderDebts() {
+    const list = document.getElementById('lg-debt-list');
+    list.innerHTML = '';
+
+    const totalOwed = debts.reduce((sum, d) => sum + d.balance, 0);
+    const totalMin = debts.reduce((sum, d) => sum + (d.minPayment || 0), 0);
+    const avgRate = debts.length ? (debts.reduce((sum, d) => sum + (d.rate || 0), 0) / debts.length) : 0;
+    document.getElementById('lg-debt-total-owed').innerText = `$${totalOwed.toFixed(2)}`;
+    document.getElementById('lg-debt-total-min').innerText = `$${totalMin.toFixed(2)}`;
+    document.getElementById('lg-debt-avg-rate').innerText = `${avgRate.toFixed(2)}%`;
+
+    if (debts.length === 0) {
+      list.innerHTML = '<div style="text-align:center; color: var(--text-secondary); font-size: 14px; padding: 20px;">No debts added yet</div>';
+      return;
+    }
+
+    debts.slice().sort((a, b) => b.balance - a.balance).forEach(d => {
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'stretch';
+      item.style.gap = '10px';
+      item.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="item-title">${d.name}</div>
+            <div class="item-sub">${d.rate || 0}% interest &middot; min payment $${(d.minPayment || 0).toFixed(2)}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap: 8px;">
+            <div class="item-val expense-text">$${d.balance.toFixed(2)}</div>
+            <button class="lg-btn edit-sm" onclick="openEditDebtModal(${d.id})">Edit</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <input type="number" id="debt-pay-${d.id}" placeholder="Log payment" style="flex:1; padding:8px 10px; font-size:13px;">
+          <button class="lg-btn edit-sm" onclick="logDebtPayment(${d.id})">Pay</button>
+          <button class="lg-btn edit-sm" onclick="removeDebt(${d.id})">Remove</button>
+        </div>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  function addAsset() {
+    const name = document.getElementById('lg-asset-name').value.trim();
+    const type = document.getElementById('lg-asset-type').value;
+    const amount = parseFloat(document.getElementById('lg-asset-amount').value) || 0;
+
+    if (!name || !amount) return;
+
+    assets.push({ id: Date.now(), name, type, amount });
+
+    document.getElementById('lg-asset-name').value = '';
+    document.getElementById('lg-asset-amount').value = '';
+
+    renderAssets();
+    updateOverviewStats();
+    persist();
+  }
+
+  function removeAsset(assetId) {
+    assets = assets.filter(a => a.id !== assetId);
+    renderAssets();
+    updateOverviewStats();
+    persist();
+  }
+
+  function openEditAssetModal(assetId) {
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) return;
+    document.getElementById('edit-asset-id').value = asset.id;
+    document.getElementById('edit-asset-name').value = asset.name;
+    document.getElementById('edit-asset-type').value = asset.type;
+    document.getElementById('edit-asset-amount').value = asset.amount;
+    document.getElementById('edit-asset-modal').classList.add('active');
+  }
+
+  function saveAssetEdit() {
+    const id = parseInt(document.getElementById('edit-asset-id').value);
+    const asset = assets.find(a => a.id === id);
+    if (!asset) return;
+    asset.name = document.getElementById('edit-asset-name').value.trim() || asset.name;
+    asset.type = document.getElementById('edit-asset-type').value;
+    asset.amount = parseFloat(document.getElementById('edit-asset-amount').value) || 0;
+    renderAssets();
+    updateOverviewStats();
+    persist();
+    closeModal('edit-asset-modal');
+  }
+
+  function deleteAssetFromModal() {
+    const id = parseInt(document.getElementById('edit-asset-id').value);
+    removeAsset(id);
+    closeModal('edit-asset-modal');
+  }
+
+  function renderAssets() {
+    const list = document.getElementById('lg-asset-list');
+    list.innerHTML = '';
+
+    assets.forEach(a => {
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `
+        <div>
+          <div class="item-title">${a.name}</div>
+          <div class="item-sub">${a.type}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="item-val income-text">$${a.amount.toFixed(2)}</div>
+          <button class="lg-btn edit-sm" onclick="openEditAssetModal(${a.id})">Edit</button>
+        </div>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  // Savings Management
+  function toggleSinkingFields() {
+    const type = document.getElementById('lg-savings-type').value;
+    const sinkingFields = document.getElementById('lg-sinking-fields');
+    const amountLabel = document.getElementById('lg-savings-amount-label');
+    if (type === 'Sinking Fund') {
+      sinkingFields.style.display = 'flex';
+      amountLabel.innerText = 'Current Amount Saved';
+    } else {
+      sinkingFields.style.display = 'none';
+      amountLabel.innerText = 'Current Amount';
+    }
+  }
+
+  function addSavings() {
+    const type = document.getElementById('lg-savings-type').value;
+    const name = document.getElementById('lg-savings-name').value.trim();
+    const amount = parseFloat(document.getElementById('lg-savings-amount').value) || 0;
+
+    if (!name) return;
+
+    const item = { id: Date.now(), type, name, amount };
+
+    if (type === 'Sinking Fund') {
+      item.goal = parseFloat(document.getElementById('lg-savings-goal').value) || 0;
+      item.dateBy = document.getElementById('lg-savings-date').value;
+    }
+
+    savingsItems.push(item);
+
+    document.getElementById('lg-savings-name').value = '';
+    document.getElementById('lg-savings-amount').value = '';
+    document.getElementById('lg-savings-goal').value = '';
+    document.getElementById('lg-savings-date').value = '';
+
+    renderSavings();
+    persist();
+  }
+
+  function removeSavings(itemId) {
+    savingsItems = savingsItems.filter(s => s.id !== itemId);
+    renderSavings();
+    persist();
+  }
+
+  function openEditSavingsModal(itemId) {
+    const item = savingsItems.find(s => s.id === itemId);
+    if (!item) return;
+    document.getElementById('edit-savings-id').value = item.id;
+    document.getElementById('edit-savings-name').value = item.name;
+    document.getElementById('edit-savings-amount').value = item.amount;
+    const sinkingFields = document.getElementById('edit-sinking-fields');
+    const amountLabel = document.getElementById('edit-savings-amount-label');
+    if (item.type === 'Sinking Fund') {
+      sinkingFields.style.display = 'flex';
+      amountLabel.innerText = 'Current Amount Saved';
+      document.getElementById('edit-savings-goal').value = item.goal || 0;
+      document.getElementById('edit-savings-date').value = item.dateBy || '';
+    } else {
+      sinkingFields.style.display = 'none';
+      amountLabel.innerText = 'Current Amount';
+    }
+    document.getElementById('edit-savings-modal').classList.add('active');
+  }
+
+  function saveSavingsEdit() {
+    const id = parseInt(document.getElementById('edit-savings-id').value);
+    const item = savingsItems.find(s => s.id === id);
+    if (!item) return;
+    item.name = document.getElementById('edit-savings-name').value.trim() || item.name;
+    item.amount = parseFloat(document.getElementById('edit-savings-amount').value) || 0;
+    if (item.type === 'Sinking Fund') {
+      item.goal = parseFloat(document.getElementById('edit-savings-goal').value) || 0;
+      item.dateBy = document.getElementById('edit-savings-date').value;
+    }
+    renderSavings();
+    persist();
+    closeModal('edit-savings-modal');
+  }
+
+  function deleteSavingsFromModal() {
+    const id = parseInt(document.getElementById('edit-savings-id').value);
+    removeSavings(id);
+    closeModal('edit-savings-modal');
+  }
+
+  function renderSavings() {
+    const list = document.getElementById('lg-savings-list');
+    list.innerHTML = '';
+
+    if (savingsItems.length === 0) {
+      list.innerHTML = '<div style="text-align:center; color: var(--text-secondary); font-size: 14px; padding: 20px;">No savings added yet</div>';
+      return;
+    }
+
+    savingsItems.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'stretch';
+      item.style.gap = '10px';
+
+      let progressHtml = '';
+      if (s.type === 'Sinking Fund' && s.goal > 0) {
+        const pct = Math.min((s.amount / s.goal) * 100, 100);
+        const dueText = s.dateBy ? ` &middot; by ${s.dateBy}` : '';
+        progressHtml = `
+          <div class="item-sub">$${s.amount.toFixed(2)} / $${s.goal.toFixed(2)}${dueText}</div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style="width: ${pct}%; background-color: #5ac8fa"></div>
+          </div>
+        `;
+      } else {
+        progressHtml = `<div class="progress-bar-bg"><div class="progress-bar-fill" style="width: 100%; background-color: #34c759"></div></div>`;
+      }
+
+      item.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="item-title">${s.name}</div>
+            <div class="item-sub">${s.type}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="item-val income-text">$${s.amount.toFixed(2)}</div>
+            <button class="lg-btn edit-sm" onclick="openEditSavingsModal(${s.id})">Edit</button>
+          </div>
+        </div>
+        ${progressHtml}
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  // Stats Update
+  function updateOverviewStats() {
+    const income = budgetEntries.filter(e => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
+    const expenses = budgetEntries.filter(e => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0) + bills.reduce((sum, b) => sum + b.amount, 0);
+    const totalBudget = income - expenses;
+
+    document.getElementById('lg-total-budget').innerText = `$${totalBudget.toFixed(2)}`;
+    document.getElementById('lg-income-val').innerText = `$${income.toFixed(2)}`;
+    document.getElementById('lg-expenditure-val').innerText = `$${expenses.toFixed(2)}`;
+
+    const totalAssets = assets.reduce((sum, a) => sum + a.amount, 0);
+    const totalDebts = debts.reduce((sum, d) => sum + d.balance, 0);
+    const netWorth = totalAssets - totalDebts;
+    document.getElementById('lg-net-worth').innerText = `$${netWorth.toFixed(2)}`;
+    document.getElementById('lg-total-assets-val').innerText = `$${totalAssets.toFixed(2)}`;
+    document.getElementById('lg-total-debts-val').innerText = `$${totalDebts.toFixed(2)}`;
+  }
+
+  // Spending Breakdown (horizontal bar chart)
+  function renderSpendingChart() {
+    const ctx = document.getElementById('overviewSpendingChart').getContext('2d');
+
+    const catTotals = {};
+
+    budgetEntries.filter(e => e.type === 'expense').forEach(e => {
+      catTotals[e.cat] = (catTotals[e.cat] || 0) + e.amount;
+    });
+
+    bills.forEach(b => {
+      catTotals[b.cat] = (catTotals[b.cat] || 0) + b.amount;
+    });
+
+    // Sort descending so the biggest spend category shows at the top
+    const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+
+    const labels = sorted.map(e => e[0]);
+    const data = sorted.map(e => e[1]);
+    const catColors = labels.map(l => categories[l]?.color || '#8e8e93');
+
+    if (spendingChart) spendingChart.destroy();
+
+    spendingChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels.length ? labels : ['No Expenses'],
+        datasets: [{
+          data: data.length ? data : [0],
+          backgroundColor: catColors.length ? catColors : ['#2c2c2e'],
+          borderRadius: 6,
+          barPercentage: 0.7,
+          categoryPercentage: 0.8
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (item) => ` $${item.raw.toFixed(2)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: {
+              color: '#8e8e93',
+              callback: (value) => `$${value}`
+            },
+            grid: { color: '#26262a' }
+          },
+          y: {
+            ticks: { color: '#ffffff', font: { size: 12 } },
+            grid: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  // Calendar
+  function renderCalendar() {
+    const grid = document.getElementById('lg-calendar-grid');
+    grid.innerHTML = '';
+
+    const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    dayNames.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'cal-day-name';
+      el.innerText = d;
+      grid.appendChild(el);
+    });
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    document.getElementById('cal-month-year').innerText = `${monthNames[month]} ${year}`;
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    for (let i = 0; i < firstDay; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'cal-cell empty';
+      grid.appendChild(empty);
+    }
+
+    for (let day = 1; day <= totalDays; day++) {
+      const cell = document.createElement('div');
+      cell.className = 'cal-cell';
+      cell.innerText = day;
+
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayBills = bills.filter(b => b.date === dateStr);
+
+      if (dayBills.length > 0) {
+        const dotsContainer = document.createElement('div');
+        dotsContainer.className = 'cal-dots-container';
+
+        dayBills.slice(0, 3).forEach(b => {
+          const dot = document.createElement('div');
+          dot.className = 'cal-dot';
+          dot.style.backgroundColor = categories[b.cat]?.color || '#8e8e93';
+          dotsContainer.appendChild(dot);
+        });
+
+        cell.appendChild(dotsContainer);
+      }
+
+      cell.onclick = () => openDayModal(dateStr, dayBills);
+
+      grid.appendChild(cell);
+    }
+  }
+
+  function openDayModal(dateStr, dayBills) {
+    document.getElementById('modal-date-title').innerText = dateStr;
+    const content = document.getElementById('modal-date-content');
+    content.innerHTML = '';
+
+    if (dayBills.length === 0) {
+      content.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 12px;">No bills due on this date.</div>';
+    } else {
+      dayBills.forEach(b => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.innerHTML = `
+          <div>
+            <div class="item-title">
+              <span class="color-indicator" style="background-color: ${categories[b.cat]?.color || '#8e8e93'};"></span>
+              ${b.name}
+            </div>
+            <div class="item-sub">${b.cat || 'Uncategorized'} • ${b.freq}</div>
+          </div>
+          <div class="item-val">$${b.amount.toFixed(2)}</div>
+        `;
+        content.appendChild(item);
+      });
+    }
+
+    document.getElementById('cal-modal').classList.add('active');
+  }
+
+  // ---- Monthly Excel export ----
+  function exportMonthToExcel(){
+    const now = new Date();
+    const mKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const monthEntries = budgetEntries.filter(e => {
+      const d = new Date(e.id);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === mKey;
+    });
+
+    const txRows = [['Date','Type','Category','Amount']]
+      .concat(monthEntries.map(e => {
+        const d = new Date(e.id);
+        return [d.toISOString().slice(0,10), e.type, e.cat, e.amount];
+      }));
+
+    const spentByCat = {};
+    monthEntries.filter(e=>e.type==='expense').forEach(e=>{ spentByCat[e.cat] = (spentByCat[e.cat]||0) + e.amount; });
+    bills.forEach(b => { spentByCat[b.cat] = (spentByCat[b.cat]||0) + b.amount; });
+    const budgetRows = [['Category','Budget Limit','Spent']]
+      .concat(Object.entries(categories).map(([name, data]) => [name, data.limit, spentByCat[name] || 0]));
+
+    const billRows = [['Bill Name','Category','Amount','Due Date','Frequency']]
+      .concat(bills.map(b => [b.name, b.cat, b.amount, b.date, b.freq]));
+
+    const debtRows = [['Debt','Balance Owed','Interest Rate (%)','Minimum Payment']]
+      .concat(debts.map(d => [d.name, d.balance, d.rate || 0, d.minPayment || 0]));
+
+    const assetRows = [['Asset','Type','Value']]
+      .concat(assets.map(a => [a.name, a.type, a.amount]));
+
+    const savingsRows = [['Name','Type','Current Amount','Goal','Date By']]
+      .concat(savingsItems.map(s => [s.name, s.type, s.amount, s.goal || '', s.dateBy || '']));
+
+    const totalAssets = assets.reduce((s,a)=>s+a.amount,0);
+    const totalDebts = debts.reduce((s,d)=>s+d.balance,0);
+    const income = monthEntries.filter(e=>e.type==='income').reduce((s,e)=>s+e.amount,0);
+    const expenses = monthEntries.filter(e=>e.type==='expense').reduce((s,e)=>s+e.amount,0) + bills.reduce((s,b)=>s+b.amount,0);
+    const summaryRows = [
+      ['Metric','Value'],
+      ['Net Worth', totalAssets - totalDebts],
+      ['Total Assets', totalAssets],
+      ['Total Debts', totalDebts],
+      ['Income This Month', income],
+      ['Expenses This Month', expenses],
+      ['Balance This Month', income - expenses]
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryRows), 'Summary');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txRows), 'Transactions');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(budgetRows), 'Budgets');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(billRows), 'Bills');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(debtRows), 'Debt');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(assetRows), 'Assets');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(savingsRows), 'Savings');
+    XLSX.writeFile(wb, `Ledger-${mKey}.xlsx`);
+
+    // Reset only the budget (income/expense entries) after export.
+    // Categories, recurring bills, debts, assets, savings, and accounts are preserved.
+    budgetEntries = [];
+    renderBudgetProgress();
+    updateOverviewStats();
+    renderSpendingChart();
+    persist();
+  }
+
+  // Initial Load Setup
+  loadLocal();
+  updateCategorySelectOptions();
+  renderCalendar();
+  renderSpendingChart();
+  updateOverviewStats();
+  renderBillsList();
+  renderAccounts();
+  renderDebts();
+  renderAssets();
+  renderSavings();
+  waitForGoogleAuth();
+</script>
+</body>
+</html>
