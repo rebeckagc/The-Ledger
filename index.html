@@ -583,6 +583,12 @@
     padding: 4px;
   }
   .bill-reminder-dismiss { color: var(--text-secondary); font-size: 20px; line-height: 1; }
+
+  .edit-amount-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+  .edit-amount-row { display: flex; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--card-border); border-radius: 10px; }
+  .edit-amount-label { flex: 1; min-width: 0; font-size: 12px; color: var(--text-secondary); }
+  .edit-amount-row input { width: 94px; padding: 8px; }
+  .edit-amount-row .lg-btn { width: auto; padding: 8px 10px; }
 </style>
 </head>
 <body>
@@ -961,10 +967,14 @@
       <div class="lg-form">
         <input type="hidden" id="edit-cat-original-name">
         <div class="field-group">
-          <label>Target Budget Limit</label>
+          <label>Category Budget Limit</label>
           <input type="number" id="edit-cat-limit" placeholder="0.00">
         </div>
-        <button class="lg-btn primary" onclick="saveCategoryEdit()">Save Target</button>
+        <button class="lg-btn primary" onclick="saveCategoryEdit()">Save Budget Limit</button>
+        <div class="field-group">
+          <label>Recorded Amounts</label>
+          <div class="edit-amount-list" id="edit-cat-amounts"></div>
+        </div>
         <button class="lg-btn danger" onclick="deleteCategoryFromModal()">Delete Category</button>
       </div>
     </div>
@@ -1521,6 +1531,7 @@
     document.getElementById('edit-cat-title').innerText = `Edit ${catName}`;
     document.getElementById('edit-cat-original-name').value = catName;
     document.getElementById('edit-cat-limit').value = categories[catName].limit;
+    renderCategoryAmountEditors(catName);
     document.getElementById('edit-cat-modal').classList.add('active');
   }
 
@@ -1530,10 +1541,62 @@
 
     if (limit > 0 && categories[catName]) {
       categories[catName].limit = limit;
-      renderBudgetProgress();
-      persist();
+      refreshCategoryAmountViews();
     }
     closeModal('edit-cat-modal');
+  }
+
+  function renderCategoryAmountEditors(catName) {
+    const container = document.getElementById('edit-cat-amounts');
+    container.innerHTML = '';
+    const entries = budgetEntries.filter(entry => entry.cat === catName);
+    const categoryBills = bills.filter(bill => bill.cat === catName);
+
+    if (!entries.length && !categoryBills.length) {
+      container.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No recorded amounts in this category yet.</div>';
+      return;
+    }
+
+    const addRow = (kind, item, label) => {
+      const row = document.createElement('div');
+      row.className = 'edit-amount-row';
+      const inputId = `edit-${kind}-amount-${item.id}`;
+      row.innerHTML = `
+        <span class="edit-amount-label">${label}</span>
+        <input type="number" min="0" step="0.01" id="${inputId}" value="${Number(item.amount).toFixed(2)}" aria-label="Amount for ${label}">
+        <button class="lg-btn secondary" onclick="saveCategoryAmount('${kind}', '${item.id}')">Save</button>
+      `;
+      container.appendChild(row);
+    };
+
+    entries.forEach(entry => {
+      const type = entry.type === 'income' ? 'Income entry' : 'Expense entry';
+      addRow('entry', entry, type);
+    });
+    categoryBills.forEach(bill => addRow('bill', bill, `${bill.name} bill`));
+  }
+
+  function saveCategoryAmount(kind, id) {
+    const input = document.getElementById(`edit-${kind}-amount-${id}`);
+    const amount = parseFloat(input.value);
+    if (!Number.isFinite(amount) || amount < 0) return;
+
+    const items = kind === 'bill' ? bills : budgetEntries;
+    const item = items.find(candidate => String(candidate.id) === String(id));
+    if (!item) return;
+
+    item.amount = amount;
+    refreshCategoryAmountViews();
+  }
+
+  function refreshCategoryAmountViews() {
+    renderBudgetProgress();
+    renderBillsList();
+    updateOverviewStats();
+    renderSpendingChart();
+    renderCalendar();
+    renderBillReminder();
+    persist();
   }
 
   function deleteCategoryFromModal() {
@@ -2261,4 +2324,5 @@
 </script>
 </body>
 </html>
+
 
