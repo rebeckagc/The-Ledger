@@ -1354,6 +1354,23 @@
     persist();
   }
 
+  // Apple Shortcuts can open a published Ledger URL such as:
+  // ?action=quick-add&category=Groceries&amount=25.50
+  // The query is removed immediately after saving so a refresh cannot add it twice.
+  function handleShortcutQuickAdd() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') !== 'quick-add') return;
+
+    const category = params.get('category');
+    const amount = parseFloat(params.get('amount'));
+    if (category && categories[category] && Number.isFinite(amount) && amount > 0) {
+      budgetEntries.push({ id: Date.now(), type: 'expense', cat: category, amount });
+      refreshCategoryAmountViews();
+    }
+
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+  }
+
   // Bill Pill Tabs Switcher
   function switchBillTab(tabType) {
     document.getElementById('tab-btn-upcoming').classList.toggle('active', tabType === 'upcoming');
@@ -2320,9 +2337,11 @@
   renderDebts();
   renderAssets();
   renderSavings();
+  handleShortcutQuickAdd();
   waitForGoogleAuth();
 </script>
 </body>
 </html>
+
 
 
