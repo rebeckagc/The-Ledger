@@ -548,9 +548,56 @@
     z-index: 1500;
   }
   .fab-quick-add:active { transform: scale(0.94); }
+
+  /* Upcoming-bill reminder */
+  .bill-reminder {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(calc(100% - 24px), 568px);
+    display: none;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid #6f5a27;
+    border-radius: 16px;
+    background: #252017;
+    color: var(--text-primary);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 2000;
+  }
+  .bill-reminder.visible { display: flex; }
+  .bill-reminder-icon { font-size: 20px; line-height: 1.2; }
+  .bill-reminder-copy { flex: 1; min-width: 0; }
+  .bill-reminder-title { font-size: 14px; font-weight: 700; }
+  .bill-reminder-detail { margin-top: 3px; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+  .bill-reminder-actions { display: flex; align-items: center; gap: 8px; }
+  .bill-reminder-link, .bill-reminder-dismiss {
+    border: 0;
+    background: transparent;
+    color: var(--accent-cream);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px;
+  }
+  .bill-reminder-dismiss { color: var(--text-secondary); font-size: 20px; line-height: 1; }
 </style>
 </head>
 <body>
+
+  <aside class="bill-reminder" id="bill-reminder" aria-live="polite" aria-label="Upcoming bill reminder">
+    <div class="bill-reminder-icon" aria-hidden="true">🔔</div>
+    <div class="bill-reminder-copy">
+      <div class="bill-reminder-title" id="bill-reminder-title"></div>
+      <div class="bill-reminder-detail" id="bill-reminder-detail"></div>
+    </div>
+    <div class="bill-reminder-actions">
+      <button class="bill-reminder-link" onclick="openBillsFromReminder()">View</button>
+      <button class="bill-reminder-dismiss" onclick="dismissBillReminder()" aria-label="Dismiss bill reminder">&times;</button>
+    </div>
+  </aside>
 
   <div class="lg-header" id="lg-header">
     <div class="lg-header-row">
@@ -565,6 +612,7 @@
   </div>
 
   <button class="fab-quick-add" id="lg-fab-add" onclick="openQuickAddModal()" aria-label="Quick add expense">+</button>
+  <button class="fab-quick-add" id="lg-fab-add-cat" onclick="openQuickAddCategoryModal()" aria-label="Quick add category" style="display:none;">+</button>
 
   <!-- QUICK ADD EXPENSE MODAL -->
   <div class="modal-overlay" id="quick-add-modal">
@@ -583,6 +631,44 @@
           <input type="number" id="quick-add-amount" placeholder="0.00">
         </div>
         <button class="lg-btn primary" onclick="submitQuickAdd()">Add Expense</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK ADD CATEGORY MODAL -->
+  <div class="modal-overlay" id="quick-add-cat-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 style="margin:0;">Add Category</h2>
+        <button class="close-btn" onclick="closeModal('quick-add-cat-modal')">&times;</button>
+      </div>
+      <div class="lg-form">
+        <div class="field-group">
+          <label>Category Name</label>
+          <input type="text" id="qc-cat-name" placeholder="e.g. Subscriptions">
+        </div>
+        <div class="field-group">
+          <label>Group</label>
+          <select id="qc-cat-group">
+            <option value="Rent & Utilities">Rent & Utilities</option>
+            <option value="Loans">Loans</option>
+            <option value="Subscriptions">Subscriptions</option>
+            <option value="Living Expenses">Living Expenses</option>
+            <option value="Dogs">Dogs</option>
+            <option value="Savings">Savings</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label>Target Budget</label>
+            <input type="number" id="qc-cat-limit" placeholder="500.00">
+          </div>
+          <div class="field-group" style="max-width: 70px;">
+            <label>Color</label>
+            <input type="color" id="qc-cat-color" value="#e5c158">
+          </div>
+        </div>
+        <button class="lg-btn primary" onclick="submitQuickAddCategory()">Add Category</button>
       </div>
     </div>
   </div>
@@ -609,7 +695,11 @@
 
     <div class="lg-card">
       <h2>Calendar</h2>
-      <div class="cal-header" id="cal-month-year">July 2026</div>
+      <div class="cal-header">
+        <button class="lg-btn edit-sm" onclick="changeCalMonth(-1)" aria-label="Previous month">&larr;</button>
+        <span id="cal-month-year">July 2026</span>
+        <button class="lg-btn edit-sm" onclick="changeCalMonth(1)" aria-label="Next month">&rarr;</button>
+      </div>
       <div class="cal-grid" id="lg-calendar-grid"></div>
     </div>
 
@@ -647,35 +737,6 @@
 
     <div class="lg-card">
       <h2>Categories & Progress</h2>
-      <div class="lg-form" style="margin-bottom: 20px;">
-        <div class="field-group">
-          <label>Category Name</label>
-          <input type="text" id="lg-new-cat-name" placeholder="e.g. Subscriptions">
-        </div>
-        <div class="field-group">
-          <label>Group</label>
-          <select id="lg-new-cat-group">
-            <option value="Rent & Utilities">Rent & Utilities</option>
-            <option value="Loans">Loans</option>
-            <option value="Subscriptions">Subscriptions</option>
-            <option value="Living Expenses">Living Expenses</option>
-            <option value="Dogs">Dogs</option>
-            <option value="Savings">Savings</option>
-          </select>
-        </div>
-        <div class="field-row">
-          <div class="field-group">
-            <label>Target Budget</label>
-            <input type="number" id="lg-new-cat-limit" placeholder="500.00">
-          </div>
-          <div class="field-group" style="max-width: 70px;">
-            <label>Color</label>
-            <input type="color" id="lg-new-cat-color" value="#e5c158">
-          </div>
-        </div>
-        <button class="lg-btn secondary" onclick="addCategory()">Add Category</button>
-      </div>
-
       <div id="budget-progress-container"></div>
     </div>
   </div>
@@ -1228,6 +1289,7 @@
     updateOverviewStats();
     renderCalendar();
     renderSpendingChart();
+    renderBillReminder();
   }
 
   // Bottom Navigation Controller
@@ -1239,6 +1301,7 @@
     document.getElementById(`panel-${tabId}`).classList.add('active');
 
     document.getElementById('lg-fab-add').style.display = tabId === 'overview' ? 'flex' : 'none';
+    document.getElementById('lg-fab-add-cat').style.display = tabId === 'budget' ? 'flex' : 'none';
     document.getElementById('lg-header').style.display = tabId === 'overview' ? 'flex' : 'none';
 
     if (tabId === 'overview') {
@@ -1250,6 +1313,7 @@
       renderBudgetProgress();
     } else if (tabId === 'bills') {
       updateCategorySelectOptions();
+      renderBillsList();
     } else if (tabId === 'savings') {
       renderSavings();
     } else if (tabId === 'debt') {
@@ -1316,7 +1380,89 @@
 
     switchBillTab('upcoming');
     updateOverviewStats();
+    renderBillReminder();
     persist();
+  }
+
+  // ---- In-app upcoming-bill reminder ----
+  // Bills recur from their originally selected due date. For example, a bill set
+  // for the 31st is due on the last day of shorter months.
+  let billReminderDismissed = false;
+
+  function localDateFromISO(isoDate) {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  function dateAtStartOfDay(date = new Date()) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  function dueDateForMonth(year, month, preferredDay) {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(preferredDay, lastDay));
+  }
+
+  function getNextBillDueDate(bill, today = dateAtStartOfDay()) {
+    if (!bill.date) return new Date(8640000000000000);
+    const originalDate = localDateFromISO(bill.date);
+    const preferredDay = originalDate.getDate();
+    let due;
+
+    if (bill.freq === 'yearly') {
+      due = dueDateForMonth(today.getFullYear(), originalDate.getMonth(), preferredDay);
+      if (due < today) due = dueDateForMonth(today.getFullYear() + 1, originalDate.getMonth(), preferredDay);
+    } else {
+      due = dueDateForMonth(today.getFullYear(), today.getMonth(), preferredDay);
+      if (due < today) due = dueDateForMonth(today.getFullYear(), today.getMonth() + 1, preferredDay);
+    }
+    return due;
+  }
+
+  function formatLocalDate(date) {
+    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+  }
+
+  function daysUntil(date, today = dateAtStartOfDay()) {
+    return Math.round((dateAtStartOfDay(date) - today) / 86400000);
+  }
+
+  function renderBillReminder() {
+    const reminder = document.getElementById('bill-reminder');
+    if (billReminderDismissed || !reminder) {
+      reminder?.classList.remove('visible');
+      return;
+    }
+
+    const upcoming = bills
+      .map(bill => ({ bill, due: getNextBillDueDate(bill) }))
+      .filter(({ due }) => daysUntil(due) <= 7)
+      .sort((a, b) => a.due - b.due);
+
+    if (!upcoming.length) {
+      reminder.classList.remove('visible');
+      return;
+    }
+
+    const first = upcoming[0];
+    const days = daysUntil(first.due);
+    const when = days === 0 ? 'due today' : days === 1 ? 'due tomorrow' : `due in ${days} days`;
+    const more = upcoming.length > 1 ? ` + ${upcoming.length - 1} more` : '';
+    document.getElementById('bill-reminder-title').textContent = `${first.bill.name} is ${when}`;
+    document.getElementById('bill-reminder-detail').textContent = `$${first.bill.amount.toFixed(2)} on ${formatLocalDate(first.due)}${more}`;
+    reminder.classList.add('visible');
+  }
+
+  function dismissBillReminder() {
+    billReminderDismissed = true;
+    document.getElementById('bill-reminder').classList.remove('visible');
+  }
+
+  function openBillsFromReminder() {
+    const billsButton = Array.from(document.querySelectorAll('.bottom-nav .nav-btn'))
+      .find(button => button.textContent.trim() === 'Bills');
+    switchMainTab('bills', billsButton);
+    switchBillTab('upcoming');
   }
 
   function renderBillsList() {
@@ -1328,7 +1474,7 @@
       return;
     }
 
-    bills.sort((a, b) => new Date(a.date) - new Date(b.date));
+    bills.sort((a, b) => getNextBillDueDate(a) - getNextBillDueDate(b));
 
     bills.forEach(b => {
       const catColor = categories[b.cat]?.color || '#8e8e93';
@@ -1340,7 +1486,7 @@
             <span class="color-indicator" style="background-color: ${catColor};"></span>
             ${b.name}
           </div>
-          <div class="item-sub">Due: ${b.date} • Recurs: ${b.freq.charAt(0).toUpperCase() + b.freq.slice(1)}</div>
+          <div class="item-sub">Due: ${formatLocalDate(getNextBillDueDate(b))} • Recurs: ${b.freq.charAt(0).toUpperCase() + b.freq.slice(1)}</div>
         </div>
         <div class="item-val">$${b.amount.toFixed(2)}</div>
       `;
@@ -1348,20 +1494,24 @@
     });
   }
 
-  // Categories & Budget Progress Management
-  function addCategory() {
-    const name = document.getElementById('lg-new-cat-name').value.trim();
-    const limit = parseFloat(document.getElementById('lg-new-cat-limit').value) || 0;
-    const color = document.getElementById('lg-new-cat-color').value;
-    const group = document.getElementById('lg-new-cat-group').value;
+  // Quick Add Category (floating button, Budget page only)
+  function openQuickAddCategoryModal() {
+    document.getElementById('qc-cat-name').value = '';
+    document.getElementById('qc-cat-limit').value = '';
+    document.getElementById('quick-add-cat-modal').classList.add('active');
+  }
+
+  function submitQuickAddCategory() {
+    const name = document.getElementById('qc-cat-name').value.trim();
+    const limit = parseFloat(document.getElementById('qc-cat-limit').value) || 0;
+    const color = document.getElementById('qc-cat-color').value;
+    const group = document.getElementById('qc-cat-group').value;
 
     if (!name || limit <= 0) return;
 
     categories[name] = { limit, color, group };
 
-    document.getElementById('lg-new-cat-name').value = '';
-    document.getElementById('lg-new-cat-limit').value = '';
-
+    closeModal('quick-add-cat-modal');
     updateCategorySelectOptions();
     renderBudgetProgress();
     persist();
@@ -1935,6 +2085,17 @@
   }
 
   // Calendar
+  const _today = new Date();
+  let calMonth = _today.getMonth();
+  let calYear = _today.getFullYear();
+
+  function changeCalMonth(delta) {
+    calMonth += delta;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  }
+
   function renderCalendar() {
     const grid = document.getElementById('lg-calendar-grid');
     grid.innerHTML = '';
@@ -1947,9 +2108,8 @@
       grid.appendChild(el);
     });
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    const year = calYear;
+    const month = calMonth;
 
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     document.getElementById('cal-month-year').innerText = `${monthNames[month]} ${year}`;
@@ -2092,6 +2252,7 @@
   renderSpendingChart();
   updateOverviewStats();
   renderBillsList();
+  renderBillReminder();
   renderAccounts();
   renderDebts();
   renderAssets();
@@ -2100,3 +2261,4 @@
 </script>
 </body>
 </html>
+
